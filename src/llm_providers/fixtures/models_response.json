@@ -1,0 +1,182 @@
+{
+  "data": [
+    {
+      "id": "default",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "unloaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "0",
+          "--alias",
+          "default",
+          "--flash-attn",
+          "true"
+        ],
+        "preset": "[default]\nmmap = false\nflash-attn = true\n\n"
+      }
+    },
+    {
+      "id": "gpt-oss-120b",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "unloaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "0",
+          "--alias",
+          "gpt-oss-120b",
+          "--ctx-size",
+          "131072",
+          "--flash-attn",
+          "true",
+          "--model",
+          "/home/scott/models/gpt-oss-120b/gpt-oss-120b-F16.gguf",
+          "--n-gpu-layers",
+          "99"
+        ],
+        "preset": "[gpt-oss-120b]\nmmap = false\nctx-size = 131072\nflash-attn = true\nmodel = /home/scott/models/gpt-oss-120b/gpt-oss-120b-F16.gguf\nn-gpu-layers = 99\n\n"
+      }
+    },
+    {
+      "id": "qwen3-coder-next",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "unloaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "0",
+          "--alias",
+          "qwen3-coder-next",
+          "--batch-size",
+          "256",
+          "--ctx-size",
+          "256000",
+          "--flash-attn",
+          "true",
+          "--model",
+          "/home/scott/models/Qwen3-Coder-Next-Q4_K_M.gguf",
+          "--n-gpu-layers",
+          "99"
+        ],
+        "preset": "[qwen3-coder-next]\nmmap = false\nbatch-size = 256\nctx-size = 256000\nflash-attn = true\nmodel = /home/scott/models/Qwen3-Coder-Next-Q4_K_M.gguf\nn-gpu-layers = 99\n\n"
+      }
+    },
+    {
+      "id": "qwen3-next-80b",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "unloaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "0",
+          "--alias",
+          "qwen3-next-80b",
+          "--batch-size",
+          "256",
+          "--ctx-size",
+          "40000",
+          "--flash-attn",
+          "true",
+          "--model",
+          "/home/scott/models/qwen3-next-80b/Qwen3-Next-80b-A3B-Instruct-UD-Q5_K_XL-00001-of-00002.gguf",
+          "--n-gpu-layers",
+          "99"
+        ],
+        "preset": "[qwen3-next-80b]\nmmap = false\nbatch-size = 256\nctx-size = 40000\nflash-attn = true\nmodel = /home/scott/models/qwen3-next-80b/Qwen3-Next-80b-A3B-Instruct-UD-Q5_K_XL-00001-of-00002.gguf\nn-gpu-layers = 99\n\n"
+      }
+    },
+    {
+      "id": "qwen3.6-27b",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "loaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "60505",
+          "--alias",
+          "qwen3.6-27b",
+          "--ctx-size",
+          "200000",
+          "--flash-attn",
+          "true",
+          "--model",
+          "/home/scott/models/Qwen3.6-27b/Qwen3.6-27B-BF16-00001-of-00002.gguf",
+          "--n-gpu-layers",
+          "99"
+        ],
+        "preset": "[qwen3.6-27b]\nmmap = false\nctx-size = 200000\nflash-attn = true\nmodel = /home/scott/models/Qwen3.6-27b/Qwen3.6-27B-BF16-00001-of-00002.gguf\nn-gpu-layers = 99\n\n"
+      }
+    },
+    {
+      "id": "stepflash-3-5",
+      "aliases": [],
+      "tags": [],
+      "object": "model",
+      "owned_by": "llamacpp",
+      "created": 1777719895,
+      "status": {
+        "value": "unloaded",
+        "args": [
+          "/usr/bin/llama-server",
+          "--host",
+          "127.0.0.1",
+          "--no-mmap",
+          "--port",
+          "0",
+          "--alias",
+          "stepflash-3-5",
+          "--flash-attn",
+          "true",
+          "--model",
+          "/home/scott/models/stepflash_3_5/step3p5_flash_Q4_K_S-00001-of-00012.gguf",
+          "--n-gpu-layers",
+          "99"
+        ],
+        "preset": "[stepflash-3-5]\nmmap = false\nflash-attn = true\nmodel = /home/scott/models/stepflash_3_5/step3p5_flash_Q4_K_S-00001-of-00012.gguf\nn-gpu-layers = 99\n\n"
+      }
+    }
+  ],
+  "object": "list"
+}
+
