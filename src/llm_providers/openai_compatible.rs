@@ -5,16 +5,8 @@ use std::error::Error;
 
 
 pub struct OpenAiCompatibleClient {
-    models: Vec<Model>,
+    models: Option<Vec<Model>>,
     base_url: String,
-}
-
-impl OpenAiCompatibleClient {
-        pub async fn get_available_models() -> Result<Vec<Model>, Box<dyn Error>>{
-        let model_body = get_models_body().await?;
-        let models = deserialise_models(&model_body)?;
-        Ok(models)
-    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -27,18 +19,32 @@ struct ModelsResponse {
     data: Vec<Model>,
 }
 
-async fn  get_models_body () -> Result<String, reqwest::Error> {
-    let body = reqwest::get("http://192.168.1.202:8080/models")
-        .await?
-        .text()
-        .await?;
-    Ok(body)
-}
+impl OpenAiCompatibleClient {
+    pub async fn new(base_url: String) -> Self {
+       Self { 
+            base_url: base_url,
+            models: None,
+       }
+    }
 
-fn deserialise_models(body: &str) -> Result<Vec<Model>, serde_json::Error> {
-    let response: ModelsResponse = serde_json::from_str(body)?;
-    Ok(response.data)
+    pub async fn get_available_models(&mut self) -> Result<Vec<Model>, Box<dyn Error>>{
+        let model_body = OpenAiCompatibleClient::get_models_body().await?;
+        let models = OpenAiCompatibleClient::deserialise_models(&model_body)?;
+        Ok(models)
+    }
 
+    async fn  get_models_body () -> Result<String, reqwest::Error> {
+        let body = reqwest::get("http://192.168.1.202:8080/models")
+            .await?
+            .text()
+            .await?;
+        Ok(body)
+    }
+
+    fn deserialise_models(body: &str) -> Result<Vec<Model>, serde_json::Error> {
+        let response: ModelsResponse = serde_json::from_str(body)?;
+        Ok(response.data)
+    }
 }
 
 #[cfg(test)]
@@ -49,13 +55,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_models_returns_ok() {
-        let body = get_models_body().await.unwrap();
+        let body = OpenAiCompatibleClient::get_models_body().await.unwrap();
         assert!(!body.is_empty());
     }
 
     #[test]
     fn test_deserialise_models() {
-        let models = deserialise_models(MODELS_FIXTURE).unwrap();
+        let models = OpenAiCompatibleClient::deserialise_models(MODELS_FIXTURE).unwrap();
         assert!(!models.is_empty());
     }
 }
