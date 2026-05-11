@@ -1,12 +1,82 @@
-use reqwest; 
+use reqwest::Client; 
 use serde::Deserialize;
 use serde_json;
 use std::error::Error;
+use std::time::Duration;
 
 
 pub struct OpenAiCompatibleClient {
-    models: Option<Vec<Model>>,
+    http: Client,
     base_url: String,
+    api_key: Option<String>,
+}
+
+pub struct OpenAiCompatibleClientBuilder {
+    base_url: Option<String>,
+    api_key: Option<String>,
+    timeout: Duration,
+}
+
+impl OpenAiCompatibleClientBuilder {
+    pub fn new() ->  Self {
+        Self {
+            base_url: None,
+            api_key: None,
+            timeout: Duration::from_secs(30),
+        }
+    }
+
+    pub fn base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_url = Some(url.into());
+        self
+    }
+
+    pub fn api_key(mut self, key: impl Into<String>) -> Self {
+        self.api_key = Some(key.into());
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn build(self) -> Result<OpenAiCompatibleClient, Box<dyn Error>> {
+        let base_url = self.base_url.ok_or("base_url is required")?;
+        let http = Client::builder().timeout(self.timeout).build()?;
+        Ok(OpenAiCompatibleClient {
+            http,
+            base_url,
+            api_key: self.api_key,
+        })
+    }
+
+}
+
+impl OpenAiCompatibleClient {
+
+    pub fn builder() -> OpenAiCompatibleClientBuilder {
+        OpenAiCompatibleClientBuilder::new()
+    }
+
+    pub async fn list_models(&self) -> Result<Vec<Model>, Box<dyn Error>> {
+        let body = self.fetch_models_body().await?;
+        Self::parse_models(&body)
+    }
+
+    async fn fetch_models_body(&self) -> Result<String, reqwest::Error> {
+        let mut req = self.http.get(format!("{}/models", self.base_url)); 
+        if let Some(key) = &self.api_key {
+            req = req.bearer_auth(key);
+        }
+        let body = req.send().await?.text().await?;
+        Ok(body)
+    }
+
+    fn parse_models(body: &str) -> Result<Vec<Model>, Box<dyn Error>> {
+        let response: ModelsResponse = serde_json::from_str(body)?;
+        Ok(response.data)
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -19,33 +89,6 @@ struct ModelsResponse {
     data: Vec<Model>,
 }
 
-impl OpenAiCompatibleClient {
-    pub async fn new(base_url: String) -> Self {
-       Self { 
-            base_url: base_url,
-            models: None,
-       }
-    }
-
-    pub async fn get_available_models(&mut self) -> Result<Vec<Model>, Box<dyn Error>>{
-        let model_body = OpenAiCompatibleClient::get_models_body().await?;
-        let models = OpenAiCompatibleClient::deserialise_models(&model_body)?;
-        Ok(models)
-    }
-
-    async fn  get_models_body () -> Result<String, reqwest::Error> {
-        let body = reqwest::get("http://192.168.1.202:8080/models")
-            .await?
-            .text()
-            .await?;
-        Ok(body)
-    }
-
-    fn deserialise_models(body: &str) -> Result<Vec<Model>, serde_json::Error> {
-        let response: ModelsResponse = serde_json::from_str(body)?;
-        Ok(response.data)
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -53,15 +96,20 @@ mod tests {
 
     const MODELS_FIXTURE: &str = include_str!("fixtures/models_response.json");
 
+    //TODO: revisit these tests and split into proper integration versus e2e tests. 
     #[tokio::test]
     async fn test_list_models_returns_ok() {
-        let body = OpenAiCompatibleClient::get_models_body().await.unwrap();
+        let client = OpenAiCompatibleClient::builder()
+            .base_url("http://192.168.1.202:8080/v1")
+            .build().unwrap();
+
+        let body = client.list_models().await.unwrap();
         assert!(!body.is_empty());
     }
 
     #[test]
     fn test_deserialise_models() {
-        let models = OpenAiCompatibleClient::deserialise_models(MODELS_FIXTURE).unwrap();
+        let models = OpenAiCompatibleClient::parse_models(MODELS_FIXTURE).unwrap();
         assert!(!models.is_empty());
     }
 }
