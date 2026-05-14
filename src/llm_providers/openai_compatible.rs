@@ -1,5 +1,5 @@
 use reqwest::Client; 
-use serde::Deserialize;
+use serde:: {Deserialize, Serialize};
 use serde_json;
 use std::error::Error;
 use std::time::Duration;
@@ -17,12 +17,36 @@ pub struct OpenAiCompatibleClientBuilder {
     timeout: Duration,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Model{
+    pub id: String 
+}
+
+#[derive(Deserialize, Debug)]
+struct ModelsResponse {
+    data: Vec<Model>,
+}
+
+
+#[derive(Serialize, Debug)]
+pub struct ChatCompletionsRequestMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ChatCompletionsRequest {
+    pub model: String,
+    pub messages: Vec<ChatCompletionsRequestMessage>,
+    pub stream: bool,
+}
+
 impl OpenAiCompatibleClientBuilder {
     pub fn new() ->  Self {
         Self {
             base_url: None,
             api_key: None,
-            timeout: Duration::from_secs(30),
+            timeout: Duration::from_secs(60),
         }
     }
 
@@ -77,16 +101,17 @@ impl OpenAiCompatibleClient {
         let response: ModelsResponse = serde_json::from_str(body)?;
         Ok(response.data)
     }
-}
+    pub async fn create_chat_completion(&self, chat_request: &ChatCompletionsRequest)
+        -> Result<String, Box<dyn Error>> {
+        let request_body = serde_json::to_string(chat_request)?;
+        println!("{}", request_body);
+        let resp = self.http.post(format!("{}/chat/completions", self.base_url))
+                .body(request_body)
+                .send()
+                .await?.text().await?;
+       Ok(resp) 
+    }
 
-#[derive(Deserialize, Debug)]
-struct Model{
-    id: String 
-}
-
-#[derive(Deserialize, Debug)]
-struct ModelsResponse {
-    data: Vec<Model>,
 }
 
 

@@ -1,25 +1,32 @@
 use std::error::Error;
 use std::io::{self, Write};
-use async_openai::types::chat::{ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage};
-use async_openai::{
-    config::OpenAIConfig,
-    types::chat::{
-        ChatCompletionRequestAssistantMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
-        ChatCompletionRequestMessage,ChatCompletionRequestAssistantMessageContent,
-    },
-    Client,
+
+use crate::llm_providers::openai_compatible:: { 
+    Model, 
+    OpenAiCompatibleClient,
+};
+use crate::llm_providers::openai_compatible:: {
+    ChatCompletionsRequestMessage,
+    ChatCompletionsRequest,
 };
 
-pub async fn repl() -> Result<(), Box<dyn Error>> {
+
+
+pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> {
    
     println!("Welcome to ferox! (type q to exit)");
 
-    let mut messages: Vec<ChatCompletionRequestMessage> = Vec::new();
-    let system_message: ChatCompletionRequestSystemMessage = ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant")
-                .build()?;
-    messages.push(system_message.into());
+    let models = client.list_models().await?;
+    let model  = select_model(&models)?;
+    let mut messages = Vec::<ChatCompletionsRequestMessage>::new();
+
+    println!("Model Selected: {}", model);
+     
+    let mut chat_request = ChatCompletionsRequest {
+        model: model,
+        messages: messages,
+        stream: false,
+    };
 
     loop {
         let mut user_input = String::new();
@@ -32,53 +39,40 @@ pub async fn repl() -> Result<(), Box<dyn Error>> {
         match user_input.trim() {
            "q" => break Ok(()),
            _ =>  {
-                    let user_message: ChatCompletionRequestUserMessage = ChatCompletionRequestUserMessageArgs::default()
-                    .content(user_input)
-                    .build()?;
-                    messages.push(user_message.into());
-                    let response = llm_request(&mut messages).await.map_err(|e| {
-                        eprintln!("Error: {e}");
-                        io::Error::new(io::ErrorKind::Other, e.to_string())
-                    })?;
-                    match response.content {
-                        None =>  println!("Assistant: Empty Response"), 
-                        Some(ChatCompletionRequestAssistantMessageContent::Text(ref text)) => 
-                    println!("Assistant: {}", text),
-                        Some(_) => println!("Assistant: (non-text content)"),
-                    }
-                    
-                messages.push(response.into());
+                   let message = ChatCompletionsRequestMessage {
+                        role: String::from("user"),
+                        content: user_input.trim().into()
+                   };
+                   chat_request.messages.push(message);
                  }
+        }
+        
+        let response = client.create_chat_completion(&chat_request).await?;
+        println!("{}", response)
+
+    }
+}
+
+fn select_model(models: &[Model])-> Result<String, Box<dyn Error>> {
+
+    loop {
+        println!("\nAvailable models:");
+        for (i, m) in models.iter().enumerate() {
+            println!(" {}) {}", i+1, m.id);
+        }
+
+        print!("Select a model [1-{}]:", models.len());
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        match input.trim().parse::<usize>() {
+            Ok(n) if (1..=models.len()).contains(&n) => {
+                return Ok(models[n - 1].id.clone());
+            },
+            _ => println!("Invalid selection, try again"),
         }
     }
 }
 
-async fn llm_request(messages: &mut Vec<ChatCompletionRequestMessage>) -> 
-Result<ChatCompletionRequestAssistantMessage, Box<dyn Error>> {
-
-    let api_base = "http://192.168.1.201:8080/v1";
-    let client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(api_base),
-    );
-
-    let model = "qwen3.6-27b";
-    
-
-    let request = CreateChatCompletionRequestArgs::default()
-        .model(model)
-        .messages(messages.to_vec())
-        .build()?;
-
-    let response = client.chat().create(request).await?;
-    
-    let response_msg = &response.choices[0].message; 
-
-    let assistant_msg = ChatCompletionRequestAssistantMessageArgs::default()
-        .content(response_msg.content.clone().unwrap_or_default())
-        .build()?;
-
-    Ok(assistant_msg)
-    
-
-}
+   

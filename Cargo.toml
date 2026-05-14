@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-openai = {version = "0.36.0", features = ["responses","chat-completion"]}
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.1", features = ["rt-multi-thread", "macros"] }
 toml = "1.1.2"
