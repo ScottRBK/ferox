@@ -41,6 +41,18 @@ pub struct ChatCompletionsRequest {
     pub stream: bool,
 }
 
+
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionChoices{
+
+}
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionsResponse {
+    id: String,
+    choices: Vec<ChatCompletionChoices>,
+}
+
+
 impl OpenAiCompatibleClientBuilder {
     pub fn new() ->  Self {
         Self {
