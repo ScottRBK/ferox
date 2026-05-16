@@ -2,7 +2,7 @@ use reqwest::Client;
 use serde:: {Deserialize, Serialize};
 use serde_json;
 use std::error::Error;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 
 pub struct OpenAiCompatibleClient {
@@ -28,8 +28,8 @@ struct ModelsResponse {
 }
 
 
-#[derive(Serialize, Debug)]
-pub struct ChatCompletionsRequestMessage {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChatCompletionsMessage {
     pub role: String,
     pub content: String,
 }
@@ -37,28 +37,40 @@ pub struct ChatCompletionsRequestMessage {
 #[derive(Serialize, Debug)]
 pub struct ChatCompletionsRequest {
     pub model: String,
-    pub messages: Vec<ChatCompletionsRequestMessage>,
+    pub messages: Vec<ChatCompletionsMessage>,
     pub stream: bool,
 }
 
+#[derive(Deserialize, Debug)]
+pub enum ChoicesFinishReason {
+    stop,
+    length,
+    tool_calls,
+    content_filter,
+    function_call,
+}
 
 #[derive(Deserialize, Debug)]
-pub struct ChatCompletionChoices{
-
+pub struct ChatCompletionChoices {
+    pub finish_reason : ChoicesFinishReason,
+    pub index: i32,
+    pub message: ChatCompletionsMessage, 
 }
+
 #[derive(Deserialize, Debug)]
 pub struct ChatCompletionsResponse {
-    id: String,
-    choices: Vec<ChatCompletionChoices>,
+    pub id: String,
+    pub choices: Vec<ChatCompletionChoices>,
+    pub created: i32,
+    pub model: String,
 }
-
 
 impl OpenAiCompatibleClientBuilder {
     pub fn new() ->  Self {
         Self {
             base_url: None,
             api_key: None,
-            timeout: Duration::from_secs(60),
+            timeout: Duration::from_secs(240),
         }
     }
 
@@ -86,7 +98,6 @@ impl OpenAiCompatibleClientBuilder {
             api_key: self.api_key,
         })
     }
-
 }
 
 impl OpenAiCompatibleClient {
@@ -114,18 +125,16 @@ impl OpenAiCompatibleClient {
         Ok(response.data)
     }
     pub async fn create_chat_completion(&self, chat_request: &ChatCompletionsRequest)
-        -> Result<String, Box<dyn Error>> {
+        -> Result<ChatCompletionsResponse, Box<dyn Error>> {
         let request_body = serde_json::to_string(chat_request)?;
-        println!("{}", request_body);
-        let resp = self.http.post(format!("{}/chat/completions", self.base_url))
+        let body = self.http.post(format!("{}/chat/completions", self.base_url))
                 .body(request_body)
                 .send()
                 .await?.text().await?;
-       Ok(resp) 
+        let resp: ChatCompletionsResponse = serde_json::from_str(&body)?;
+        Ok(resp) 
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {

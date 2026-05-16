@@ -6,11 +6,10 @@ use crate::llm_providers::openai_compatible:: {
     OpenAiCompatibleClient,
 };
 use crate::llm_providers::openai_compatible:: {
-    ChatCompletionsRequestMessage,
+    ChatCompletionsMessage,
     ChatCompletionsRequest,
+    ChatCompletionsResponse,
 };
-
-
 
 pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> {
    
@@ -18,7 +17,7 @@ pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> 
 
     let models = client.list_models().await?;
     let model  = select_model(&models)?;
-    let mut messages = Vec::<ChatCompletionsRequestMessage>::new();
+    let mut messages = Vec::<ChatCompletionsMessage>::new();
 
     println!("Model Selected: {}", model);
      
@@ -39,7 +38,7 @@ pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> 
         match user_input.trim() {
            "q" => break Ok(()),
            _ =>  {
-                   let message = ChatCompletionsRequestMessage {
+                   let message = ChatCompletionsMessage {
                         role: String::from("user"),
                         content: user_input.trim().into()
                    };
@@ -47,9 +46,15 @@ pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> 
                  }
         }
         
-        let response = client.create_chat_completion(&chat_request).await?;
-        println!("{}", response)
-
+        let response = client.create_chat_completion(&chat_request).await;
+        match response {
+           Ok(response) => { 
+                let agent_message = response.choices[0].message.clone();
+                println!("{}", agent_message.content);
+                chat_request.messages.push(agent_message);
+           }
+           Err(e) => println!("Error fetching response from provider: {}", e)
+        }
     }
 }
 
