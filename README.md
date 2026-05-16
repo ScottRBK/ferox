@@ -10,5 +10,22 @@ Ferox aims to be an AI Agent framework that will deliver the following functiona
 - Multi-routing access, access via CLI or via API endpoints
 
 
+## Development Roadmap 
+[x] Basic CLI chat with OpenAI Compatible Chat Completions endpoint 
+[] Basic Settings & Config
+[] Basic Logging 
+[] Agent Configuration 
+    - [] Prompts 
+    - [] Tools 
+    - [] MCP 
+[] Session Management
+    - [] Memory Compaction
+    - [] Session Persistance
+    - [] Session Restore 
+[] Provider Configuration
+[] API Endpoint
+
+
+
 
 

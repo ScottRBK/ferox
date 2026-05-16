@@ -131,8 +131,14 @@ impl OpenAiCompatibleClient {
                 .body(request_body)
                 .send()
                 .await?.text().await?;
+        println!("{}", body);
+        let resp = Self::parse_chat_completions_response(&body)?; 
+        Ok(resp)
+    }
+
+    fn parse_chat_completions_response(body: &str) -> Result<ChatCompletionsResponse,Box<dyn Error>> {
         let resp: ChatCompletionsResponse = serde_json::from_str(&body)?;
-        Ok(resp) 
+        Ok(resp)  
     }
 }
 
@@ -141,9 +147,11 @@ mod tests {
     use super::*;
 
     const MODELS_FIXTURE: &str = include_str!("fixtures/models_response.json");
+    const RESPONSE_FIXUTRE: &str = include_str!("fixtures/chat_completions_response.json");
 
     //TODO: revisit these tests and split into proper integration versus e2e tests. 
-    #[tokio::test]
+
+       #[tokio::test]
     async fn test_list_models_returns_ok() {
         let client = OpenAiCompatibleClient::builder()
             .base_url("http://192.168.1.202:8080/v1")
@@ -158,4 +166,12 @@ mod tests {
         let models = OpenAiCompatibleClient::parse_models(MODELS_FIXTURE).unwrap();
         assert!(!models.is_empty());
     }
+
+    #[test]
+    fn test_deserialise_chat_response() {
+        let resp = OpenAiCompatibleClient::parse_chat_completions_response(RESPONSE_FIXUTRE).unwrap();
+        assert!(!resp.model.is_empty());
+        assert!(!resp.choices.is_empty());
+    }
 }
+
