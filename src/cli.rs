@@ -8,23 +8,22 @@ use crate::llm_providers::openai_compatible:: {
 use crate::llm_providers::openai_compatible:: {
     ChatCompletionsMessage,
     ChatCompletionsRequest,
-    ChatCompletionsResponse,
 };
 
-pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> {
+pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Box<dyn Error>> {
    
     println!("Welcome to ferox! (type q to exit)");
 
     let models = client.list_models().await?;
     let model  = select_model(&models)?;
-    let mut messages = Vec::<ChatCompletionsMessage>::new();
+    let messages = Vec::<ChatCompletionsMessage>::new();
 
     println!("Model Selected: {}", model);
      
     let mut chat_request = ChatCompletionsRequest {
-        model: model,
-        messages: messages,
-        stream: false,
+        model,
+        messages,
+        stream,
     };
 
     loop {
@@ -38,22 +37,37 @@ pub async fn repl(client: OpenAiCompatibleClient) -> Result<(), Box<dyn Error>> 
         match user_input.trim() {
            "q" => break Ok(()),
            _ =>  {
-                   let message = ChatCompletionsMessage {
-                        role: String::from("user"),
-                        content: user_input.trim().into()
+                   let message = ChatCompletionsMessage::User {
+                        content: user_input.trim().into(), 
                    };
                    chat_request.messages.push(message);
                  }
         }
         
-        let response = client.create_chat_completion(&chat_request).await;
-        match response {
-           Ok(response) => { 
-                let agent_message = response.choices[0].message.clone();
-                println!("{}", agent_message.content);
-                chat_request.messages.push(agent_message);
-           }
-           Err(e) => println!("Error fetching response from provider: {}", e)
+        //TODO: refactor this once we have it working
+        match stream {
+            false => {
+                let response = client.create_chat_completion(&chat_request).await;
+                match response {
+                   Ok(response) => { 
+                        let agent_message = response.choices[0].message.clone();
+                        println!("{}", agent_message.content());
+                        chat_request.messages.push(agent_message);
+                   }
+                   Err(e) => println!("Error fetching response from provider: {}", e)
+                }
+            },
+            true => {
+                let response = client.create_chat_completion_stream(&chat_request).await;
+                match response {
+                    Ok(response) => {
+                        let agent_message = response.choices[0].message.clone();
+                        chat_request.messages.push(agent_message);
+                        println!();
+                    }
+                    Err(e) => println!("Error fetching response from provider: {}", e)
+                }
+            }
         }
     }
 }

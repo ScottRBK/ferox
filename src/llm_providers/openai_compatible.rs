@@ -2,20 +2,7 @@ use reqwest::Client;
 use serde:: {Deserialize, Serialize};
 use serde_json;
 use std::error::Error;
-use std::time::{Duration, SystemTime};
-
-
-pub struct OpenAiCompatibleClient {
-    http: Client,
-    base_url: String,
-    api_key: Option<String>,
-}
-
-pub struct OpenAiCompatibleClientBuilder {
-    base_url: Option<String>,
-    api_key: Option<String>,
-    timeout: Duration,
-}
+use std::time::Duration;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Model{
@@ -27,11 +14,34 @@ struct ModelsResponse {
     data: Vec<Model>,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ChatCompletionsMessage {
-    pub role: String,
-    pub content: String,
+#[serde(tag = "role")]
+#[serde(rename_all = "lowercase")] 
+pub enum ChatCompletionsMessage {
+    System { content: String },
+    User { content: String },
+    Assistant { 
+        content: String, 
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
+    }
+}
+
+impl ChatCompletionsMessage {
+    pub fn content(&self) -> &str {
+        match self {
+            ChatCompletionsMessage::System { content } => content, 
+            ChatCompletionsMessage::User { content } => content, 
+            ChatCompletionsMessage::Assistant { content, .. } => content,
+        }
+    }
+
+    pub fn reasoning_content(&self) -> Option<&str> {
+        match self {
+            ChatCompletionsMessage::Assistant { reasoning_content, .. } => reasoning_content.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -42,12 +52,13 @@ pub struct ChatCompletionsRequest {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum ChoicesFinishReason {
-    stop,
-    length,
-    tool_calls,
-    content_filter,
-    function_call,
+    Stop,
+    Length,
+    ToolCalls,
+    ContentFilter,
+    FunctionCall, // Deprecated 
 }
 
 #[derive(Deserialize, Debug)]
@@ -61,8 +72,37 @@ pub struct ChatCompletionChoices {
 pub struct ChatCompletionsResponse {
     pub id: String,
     pub choices: Vec<ChatCompletionChoices>,
-    pub created: i32,
+    pub created: i64,
     pub model: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionsStreamDelta {
+    pub role: Option<String>, 
+    pub content: Option<String>,
+    pub reasoning_content: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionsStreamChoice {
+    pub index: i32,
+    pub delta: ChatCompletionsStreamDelta,
+    pub finish_reason: Option<ChoicesFinishReason>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionsStreamResponse {
+    pub id: String,
+    pub object: String,
+    pub created: i64, 
+    pub model: String,
+    pub choices: Vec<ChatCompletionsStreamChoice>
+}
+
+pub struct OpenAiCompatibleClientBuilder {
+    base_url: Option<String>,
+    api_key: Option<String>,
+    timeout: Duration,
 }
 
 impl OpenAiCompatibleClientBuilder {
@@ -100,6 +140,12 @@ impl OpenAiCompatibleClientBuilder {
     }
 }
 
+pub struct OpenAiCompatibleClient {
+    http: Client,
+    base_url: String,
+    api_key: Option<String>,
+}
+
 impl OpenAiCompatibleClient {
 
     pub fn builder() -> OpenAiCompatibleClientBuilder {
@@ -119,7 +165,6 @@ impl OpenAiCompatibleClient {
         let body = req.send().await?.text().await?;
         Ok(body)
     }
-
     fn parse_models(body: &str) -> Result<Vec<Model>, Box<dyn Error>> {
         let response: ModelsResponse = serde_json::from_str(body)?;
         Ok(response.data)
@@ -131,15 +176,79 @@ impl OpenAiCompatibleClient {
                 .body(request_body)
                 .send()
                 .await?.text().await?;
-        println!("{}", body);
         let resp = Self::parse_chat_completions_response(&body)?; 
         Ok(resp)
     }
 
     fn parse_chat_completions_response(body: &str) -> Result<ChatCompletionsResponse,Box<dyn Error>> {
-        let resp: ChatCompletionsResponse = serde_json::from_str(&body)?;
+        let resp: ChatCompletionsResponse = serde_json::from_str(body)?;
         Ok(resp)  
     }
+
+    pub async fn create_chat_completion_stream(
+        &self, 
+        chat_request: &ChatCompletionsRequest,
+    ) -> Result<ChatCompletionsResponse, Box<dyn Error>> {
+        let request_body = serde_json::to_string(chat_request)?;
+        let mut response = self.http.post(format!("{}/chat/completions", self.base_url))
+                .body(request_body)
+                .send()
+                .await?;
+        let mut message_content = String::new();
+        let mut message_id = String::new();
+        let mut message_created: i64 = 0;
+        let mut message_model = String::new();
+
+        while let Some(chunk) = response.chunk().await? {
+            let chunk_str = std::str::from_utf8(&chunk)?;
+            for line in chunk_str.lines() {
+                let line = line.trim(); 
+                if line.is_empty() { continue; }
+                let Some(data) = line.strip_prefix("data: ") else {
+                    continue;
+                };
+
+                if data == "[DONE]" {
+                    continue;
+                }
+
+                let stream_response = Self::parse_chat_completions_stream_response(data)?;
+                if let Some(content) = &stream_response.choices[0].delta.content {
+                    print!("{}", content);
+                    std::io::Write::flush(&mut std::io::stdout())?;
+                    message_content.push_str(content)
+                }
+
+                let finish_reason = &stream_response.choices[0].finish_reason;
+                if let Some(ChoicesFinishReason::Stop) = finish_reason{
+                    message_id = stream_response.id;
+                    message_created = stream_response.created;
+                    message_model = stream_response.model;
+                }
+            }
+        }
+        let message_choices = vec![ChatCompletionChoices {
+            index: 0,
+            finish_reason: ChoicesFinishReason::Stop,
+            message: ChatCompletionsMessage::Assistant{content: message_content, reasoning_content:None},
+        }];
+
+        let resp = ChatCompletionsResponse{
+            id: message_id,
+            choices: message_choices,
+            created: message_created, 
+            model: message_model,
+        }; 
+
+        Ok(resp)
+    }
+
+    fn parse_chat_completions_stream_response(chunk: &str) -> 
+        Result<ChatCompletionsStreamResponse, Box<dyn Error>> {
+        let resp: ChatCompletionsStreamResponse = serde_json::from_str(chunk)?;
+        Ok(resp)
+    }
+
 }
 
 #[cfg(test)]
@@ -151,7 +260,7 @@ mod tests {
 
     //TODO: revisit these tests and split into proper integration versus e2e tests. 
 
-       #[tokio::test]
+   #[tokio::test]
     async fn test_list_models_returns_ok() {
         let client = OpenAiCompatibleClient::builder()
             .base_url("http://192.168.1.202:8080/v1")

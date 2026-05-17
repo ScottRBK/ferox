@@ -12,6 +12,7 @@ Ferox aims to be an AI Agent framework that will deliver the following functiona
 ## Development Roadmap 
 
 - [x] Basic CLI chat with OpenAI Compatible Chat Completions endpoint 
+- [ ] Basic CLI Chat with streaming 
 - [ ] Basic Settings & Config
 - [ ] Basic Logging 
 - [ ] Agent Configuration 
@@ -24,6 +25,7 @@ Ferox aims to be an AI Agent framework that will deliver the following functiona
   + [ ] Session Restore 
 - [ ] Provider Configuration
 - [ ] API Endpoint
+- [ ] Open Telemtry and Advanced Logging
 
 
 

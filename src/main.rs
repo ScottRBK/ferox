@@ -15,7 +15,8 @@ async fn main() {
         .build()
         .expect("error building llm provider client");
 
-    let repl = repl(client).await.expect("error starting repl");
+    let stream: bool = true;
 
+    repl(client, stream).await.expect("error starting repl");
     
 }
