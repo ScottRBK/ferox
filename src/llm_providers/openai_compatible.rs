@@ -257,6 +257,7 @@ mod tests {
 
     const MODELS_FIXTURE: &str = include_str!("fixtures/models_response.json");
     const RESPONSE_FIXUTRE: &str = include_str!("fixtures/chat_completions_response.json");
+    const RESPONSE_FIXUTRE_STREAM: &str = include_str!("fixtures/chat_completions_response_stream.json");
 
     //TODO: revisit these tests and split into proper integration versus e2e tests. 
 
@@ -281,6 +282,24 @@ mod tests {
         let resp = OpenAiCompatibleClient::parse_chat_completions_response(RESPONSE_FIXUTRE).unwrap();
         assert!(!resp.model.is_empty());
         assert!(!resp.choices.is_empty());
+    }
+
+    #[test]
+    fn test_deserialise_chat_response_stream() {
+        let mut full_message = String::new();
+        for line in RESPONSE_FIXUTRE_STREAM.lines() {
+            let line = line.trim(); 
+
+            if line == "[DONE]" {
+                continue;
+            }
+
+            let stream_response = OpenAiCompatibleClient::parse_chat_completions_stream_response(line).unwrap();
+            if let Some(content) = &stream_response.choices[0].delta.content {
+                full_message.push_str(content); 
+            }
+        }
+        assert!(!full_message.is_empty())
     }
 }
 
