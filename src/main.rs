@@ -11,7 +11,7 @@ async fn main() {
     // let settings = Settings::new();
 
     let client = OpenAiCompatibleClient::builder()
-        .base_url("http:192.168.1.201:8080/v1")
+        .base_url("http://192.168.1.202:8080/v1")
         .build()
         .expect("error building llm provider client");
 

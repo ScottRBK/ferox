@@ -18,7 +18,7 @@ static SETTINGS_FILE_NAME: &str = "ferox.toml";
         let settings = Settings::from_path(SETTINGS_FILE_NAME);
         match settings {
             Ok(settings) => settings,
-            Err(e) => panic!["Error loading file {e}"],
+            Err(e) => panic!("Error loading file {e}"),
         }
     }
 

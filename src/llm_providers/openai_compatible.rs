@@ -290,11 +290,18 @@ mod tests {
         for line in RESPONSE_FIXUTRE_STREAM.lines() {
             let line = line.trim(); 
 
-            if line == "[DONE]" {
+            if line.is_empty() { continue; }
+
+            let Some(data) = line.strip_prefix("data: ") else {
+                continue;
+            };
+
+
+            if data == "[DONE]" {
                 continue;
             }
 
-            let stream_response = OpenAiCompatibleClient::parse_chat_completions_stream_response(line).unwrap();
+            let stream_response = OpenAiCompatibleClient::parse_chat_completions_stream_response(data).unwrap();
             if let Some(content) = &stream_response.choices[0].delta.content {
                 full_message.push_str(content); 
             }
