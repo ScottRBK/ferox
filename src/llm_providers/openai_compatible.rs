@@ -3,6 +3,9 @@ use serde:: {Deserialize, Serialize};
 use serde_json;
 use std::error::Error;
 use std::time::Duration;
+use async_stream::try_stream;
+use futures_core::stream::Stream; 
+
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Model{
@@ -188,59 +191,32 @@ impl OpenAiCompatibleClient {
     pub async fn create_chat_completion_stream(
         &self, 
         chat_request: &ChatCompletionsRequest,
-    ) -> Result<ChatCompletionsResponse, Box<dyn Error>> {
-        let request_body = serde_json::to_string(chat_request)?;
-        let mut response = self.http.post(format!("{}/chat/completions", self.base_url))
-                .body(request_body)
-                .send()
-                .await?;
-        let mut message_content = String::new();
-        let mut message_id = String::new();
-        let mut message_created: i64 = 0;
-        let mut message_model = String::new();
+    ) -> impl Stream<Item = Result<ChatCompletionsStreamResponse, Box<dyn Error>>> {
+        try_stream! {
+            let request_body = serde_json::to_string(chat_request)?;
+            let mut response = self.http.post(format!("{}/chat/completions", self.base_url))
+                    .body(request_body)
+                    .send()
+                    .await?;
 
-        while let Some(chunk) = response.chunk().await? {
-            let chunk_str = std::str::from_utf8(&chunk)?;
-            for line in chunk_str.lines() {
-                let line = line.trim(); 
-                if line.is_empty() { continue; }
-                let Some(data) = line.strip_prefix("data: ") else {
-                    continue;
-                };
+            while let Some(chunk) = response.chunk().await? {
+                let chunk_str = std::str::from_utf8(&chunk)?;
+                for line in chunk_str.lines() {
+                    let line = line.trim(); 
+                    if line.is_empty() { continue; }
+                    let Some(data) = line.strip_prefix("data: ") else {
+                        continue;
+                    };
 
-                if data == "[DONE]" {
-                    continue;
-                }
+                    if data == "[DONE]" {
+                        continue;
+                    }
 
-                let stream_response = Self::parse_chat_completions_stream_response(data)?;
-                if let Some(content) = &stream_response.choices[0].delta.content {
-                    print!("{}", content);
-                    std::io::Write::flush(&mut std::io::stdout())?;
-                    message_content.push_str(content)
-                }
-
-                let finish_reason = &stream_response.choices[0].finish_reason;
-                if let Some(ChoicesFinishReason::Stop) = finish_reason{
-                    message_id = stream_response.id;
-                    message_created = stream_response.created;
-                    message_model = stream_response.model;
+                    let stream_response = Self::parse_chat_completions_stream_response(data)?;
+                    yield stream_response;
                 }
             }
         }
-        let message_choices = vec![ChatCompletionChoices {
-            index: 0,
-            finish_reason: ChoicesFinishReason::Stop,
-            message: ChatCompletionsMessage::Assistant{content: message_content, reasoning_content:None},
-        }];
-
-        let resp = ChatCompletionsResponse{
-            id: message_id,
-            choices: message_choices,
-            created: message_created, 
-            model: message_model,
-        }; 
-
-        Ok(resp)
     }
 
     fn parse_chat_completions_stream_response(chunk: &str) -> 

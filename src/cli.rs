@@ -1,13 +1,17 @@
 use std::error::Error;
 use std::io::{self, Write};
 
+use futures_util::pin_mut;
+use futures_util::stream::StreamExt;
+
 use crate::llm_providers::openai_compatible:: { 
     Model, 
     OpenAiCompatibleClient,
-};
-use crate::llm_providers::openai_compatible:: {
     ChatCompletionsMessage,
     ChatCompletionsRequest,
+    ChatCompletionsResponse,
+    ChatCompletionChoices,
+    ChoicesFinishReason,
 };
 
 pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Box<dyn Error>> {
@@ -44,7 +48,6 @@ pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Bo
                  }
         }
         
-        //TODO: refactor this once we have it working
         match stream {
             false => {
                 let response = client.create_chat_completion(&chat_request).await;
@@ -58,15 +61,28 @@ pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Bo
                 }
             },
             true => {
-                let response = client.create_chat_completion_stream(&chat_request).await;
-                match response {
-                    Ok(response) => {
-                        let agent_message = response.choices[0].message.clone();
-                        chat_request.messages.push(agent_message);
-                        println!();
+                let mut message_content = String::new();
+                {
+                    let response = client.create_chat_completion_stream(&chat_request).await;
+                    pin_mut!(response);
+
+                    while let Some(completion) = response.next().await {
+                        match completion {
+                            Ok(completion) => {
+                                if let Some(content) = &completion.choices[0].delta.content {
+                                    print!("{}", content);
+                                    std::io::Write::flush(&mut std::io::stdout())?;
+                                    message_content.push_str(content);
+                                }
+                            }
+                            Err(e) => println!("Error fetching response from pprovider: {}", e)
+                        }
                     }
-                    Err(e) => println!("Error fetching response from provider: {}", e)
                 }
+                chat_request.messages.push(ChatCompletionsMessage::Assistant{
+                    content: message_content, reasoning_content:None
+                });
+               println!();
             }
         }
     }
