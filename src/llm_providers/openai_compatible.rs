@@ -5,6 +5,7 @@ use std::error::Error;
 use std::time::Duration;
 use async_stream::try_stream;
 use futures_core::stream::Stream; 
+use http;
 
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -188,34 +189,56 @@ impl OpenAiCompatibleClient {
         Ok(resp)  
     }
 
-    pub async fn create_chat_completion_stream(
+    pub async fn generate_chat_response(
         &self, 
-        chat_request: &ChatCompletionsRequest,
+        chat_request: &ChatCompletionsRequest
+    ) -> Result<reqwest::Response, Box<dyn Error>> {
+
+        let request_body = serde_json::to_string(chat_request)?;
+        let response = self.http.post(format!("{}/chat/completions", self.base_url))
+            .body(request_body)
+            .send()
+            .await?;
+        Ok(response)
+    }
+
+    fn handle_sse_line(line: &str)
+        -> Option<Result<ChatCompletionsStreamResponse, Box<dyn Error>>> {
+        let line = line.trim();
+
+        if line.is_empty(){ return None; }
+
+        let data = line.strip_prefix("data: ")?;
+
+        if data == "[DONE]" { return None; };
+
+        Some(Self::parse_chat_completions_stream_response(data))
+    }
+
+    pub fn stream_chat_response(mut response: reqwest::Response 
     ) -> impl Stream<Item = Result<ChatCompletionsStreamResponse, Box<dyn Error>>> {
-        try_stream! {
-            let request_body = serde_json::to_string(chat_request)?;
-            let mut response = self.http.post(format!("{}/chat/completions", self.base_url))
-                    .body(request_body)
-                    .send()
-                    .await?;
 
-            while let Some(chunk) = response.chunk().await? {
-                let chunk_str = std::str::from_utf8(&chunk)?;
-                for line in chunk_str.lines() {
-                    let line = line.trim(); 
-                    if line.is_empty() { continue; }
-                    let Some(data) = line.strip_prefix("data: ") else {
-                        continue;
-                    };
+            try_stream! {
+                let mut buffer: Vec<u8> = Vec::new(); 
 
-                    if data == "[DONE]" {
-                        continue;
+                while let Some(chunk) = response.chunk().await? {
+                    buffer.extend_from_slice(&chunk);
+
+                    while let Some(nl) = buffer.iter().position(|&b| b == b'\n') {
+                        let line_bytes: Vec<u8> = buffer.drain(..=nl).collect();
+                        let line = std::str::from_utf8(&line_bytes)?;
+                        if let Some(result) = Self::handle_sse_line(line) { 
+                            yield result?;
+                        }
                     }
-
-                    let stream_response = Self::parse_chat_completions_stream_response(data)?;
-                    yield stream_response;
                 }
-            }
+
+                if !buffer.is_empty() {
+                    let line = std::str::from_utf8(&buffer)?;
+                    if let Some(result) = Self::handle_sse_line(line)  {
+                        yield result?;
+                    }
+                }
         }
     }
 
@@ -230,6 +253,8 @@ impl OpenAiCompatibleClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::StreamExt;
+    use futures_util::pin_mut;
 
     const MODELS_FIXTURE: &str = include_str!("fixtures/models_response.json");
     const RESPONSE_FIXUTRE: &str = include_str!("fixtures/chat_completions_response.json");
@@ -260,29 +285,57 @@ mod tests {
         assert!(!resp.choices.is_empty());
     }
 
-    #[test]
-    fn test_deserialise_chat_response_stream() {
-        let mut full_message = String::new();
-        for line in RESPONSE_FIXUTRE_STREAM.lines() {
-            let line = line.trim(); 
+    #[tokio::test]
+    async fn test_stream_chat_response() {
+        // Arrange 
+        let response = reqwest::Response::from(http::Response::new(RESPONSE_FIXUTRE_STREAM));
 
-            if line.is_empty() { continue; }
+        // Act 
+        let stream = OpenAiCompatibleClient::stream_chat_response(response);
+        pin_mut!(stream);
+        let mut content = String::new();
 
-            let Some(data) = line.strip_prefix("data: ") else {
-                continue;
-            };
-
-
-            if data == "[DONE]" {
-                continue;
-            }
-
-            let stream_response = OpenAiCompatibleClient::parse_chat_completions_stream_response(data).unwrap();
-            if let Some(content) = &stream_response.choices[0].delta.content {
-                full_message.push_str(content); 
+        while let Some(item) = stream.next().await {
+            let chunk = item.unwrap();
+            if let Some(c) = &chunk.choices[0].delta.content {
+                content.push_str(c);
             }
         }
-        assert!(!full_message.is_empty())
+
+        //Assert 
+        assert_eq!(content, "Hey! How can I help you today? 😊");
+    }
+
+    #[tokio::test]
+    async fn test_utf8_byte_split_stream_chat_response() {
+
+        let split = RESPONSE_FIXUTRE_STREAM.find('😊').unwrap() + 2;
+
+        let (request_one, request_two) = RESPONSE_FIXUTRE_STREAM.as_bytes().split_at(split);
+
+        let chunks: Vec<Result<_, ::std::io::Error>> = vec![Ok(request_one), Ok(request_two)];
+
+        let stream = futures_util::stream::iter(chunks);
+
+        let body = reqwest::Body::wrap_stream(stream);
+
+        // Arrange 
+        let response = reqwest::Response::from(http::Response::new(body));
+
+        // Act 
+        let stream = OpenAiCompatibleClient::stream_chat_response(response);
+        pin_mut!(stream);
+        let mut content = String::new();
+
+        while let Some(item) = stream.next().await {
+            let chunk = item.unwrap();
+            if let Some(c) = &chunk.choices[0].delta.content {
+                content.push_str(c);
+            }
+        }
+
+        //Assert 
+        assert_eq!(content, "Hey! How can I help you today? 😊");
     }
 }
 

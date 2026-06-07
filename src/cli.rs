@@ -9,9 +9,6 @@ use crate::llm_providers::openai_compatible:: {
     OpenAiCompatibleClient,
     ChatCompletionsMessage,
     ChatCompletionsRequest,
-    ChatCompletionsResponse,
-    ChatCompletionChoices,
-    ChoicesFinishReason,
 };
 
 pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Box<dyn Error>> {
@@ -62,21 +59,19 @@ pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Bo
             },
             true => {
                 let mut message_content = String::new();
-                {
-                    let response = client.create_chat_completion_stream(&chat_request).await;
-                    pin_mut!(response);
-
-                    while let Some(completion) = response.next().await {
-                        match completion {
-                            Ok(completion) => {
-                                if let Some(content) = &completion.choices[0].delta.content {
-                                    print!("{}", content);
-                                    std::io::Write::flush(&mut std::io::stdout())?;
-                                    message_content.push_str(content);
-                                }
+                let response = client.generate_chat_response(&chat_request).await?;
+                let stream = OpenAiCompatibleClient::stream_chat_response(response);
+                pin_mut!(stream);
+                while let Some(completion) = stream.next().await {
+                    match completion {
+                        Ok(completion) => {
+                            if let Some(content) = &completion.choices[0].delta.content {
+                                print!("{}", content);
+                                std::io::Write::flush(&mut std::io::stdout())?;
+                                message_content.push_str(content);
                             }
-                            Err(e) => println!("Error fetching response from pprovider: {}", e)
                         }
+                        Err(e) => println!("Error fetching response from pprovider: {}", e)
                     }
                 }
                 chat_request.messages.push(ChatCompletionsMessage::Assistant{
