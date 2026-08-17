@@ -1,65 +1,56 @@
 use std::error::Error;
 use std::io::{self, Write};
 
-use futures_util::pin_mut;
-use futures_util::stream::StreamExt;
+use ferox::gateway::Gateway;
+use ferox::models::{CompletionRequest, Message, Model};
+use ferox::ports::llm::LlmProvider;
+use futures_util::{StreamExt, pin_mut};
 
-use crate::llm_providers::openai_compatible:: { 
-    Model, 
-    OpenAiCompatibleClient,
-    ChatCompletionsMessage,
-    ChatCompletionsRequest,
-};
+pub async fn repl<P>(gateway: Gateway<P>, stream: bool) -> Result<(), Box<dyn Error>>
+where
+    P: LlmProvider,
+{
+    println!("Welcome to ferox example CLI! (type q to exit)");
 
-pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Box<dyn Error>> {
-   
-    println!("Welcome to ferox! (type q to exit)");
-
-    let models = client.list_models().await?;
-    let model  = select_model(&models)?;
-    let messages = Vec::<ChatCompletionsMessage>::new();
+    let models = gateway.list_models().await?;
+    let model = select_model(&models)?;
+    let messages = Vec::<Message>::new();
 
     println!("Model Selected: {}", model);
-     
-    let mut chat_request = ChatCompletionsRequest {
-        model,
-        messages,
-        stream,
-    };
 
     loop {
         let mut user_input = String::new();
-        print!("> "); 
-        io::stdout().flush()?; 
+        print!("> ");
+        io::stdout().flush()?;
         io::stdin()
             .read_line(&mut user_input)
             .expect("Error reading input");
-        
+
         match user_input.trim() {
-           "q" => break Ok(()),
-           _ =>  {
-                   let message = ChatCompletionsMessage::User {
-                        content: user_input.trim().into(), 
-                   };
-                   chat_request.messages.push(message);
-                 }
+            "q" => break Ok(()),
+            _ => {
+                let message = ChatCompletionsMessage::User {
+                    content: user_input.trim().into(),
+                };
+                chat_request.messages.push(message);
+            }
         }
-        
+
         match stream {
             false => {
                 let response = client.create_chat_completion(&chat_request).await;
                 match response {
-                   Ok(response) => { 
+                    Ok(response) => {
                         let agent_message = response.choices[0].message.clone();
                         println!("{}", agent_message.content());
                         chat_request.messages.push(agent_message);
-                   }
-                   Err(e) => println!("Error fetching response from provider: {}", e)
+                    }
+                    Err(e) => println!("Error fetching response from provider: {}", e),
                 }
-            },
+            }
             true => {
                 let mut message_content = String::new();
-                let response = client.generate_chat_response(&chat_request).await?;
+                let response = client.generate_chat_(&chat_request).await?;
                 let stream = OpenAiCompatibleClient::stream_chat_response(response);
                 pin_mut!(stream);
                 while let Some(completion) = stream.next().await {
@@ -71,24 +62,26 @@ pub async fn repl(client: OpenAiCompatibleClient, stream: bool) -> Result<(), Bo
                                 message_content.push_str(content);
                             }
                         }
-                        Err(e) => println!("Error fetching response from pprovider: {}", e)
+                        Err(e) => println!("Error fetching response from pprovider: {}", e),
                     }
                 }
-                chat_request.messages.push(ChatCompletionsMessage::Assistant{
-                    content: message_content, reasoning_content:None
-                });
-               println!();
+                chat_request
+                    .messages
+                    .push(ChatCompletionsMessage::Assistant {
+                        content: message_content,
+                        reasoning_content: None,
+                    });
+                println!();
             }
         }
     }
 }
 
-fn select_model(models: &[Model])-> Result<String, Box<dyn Error>> {
-
+fn select_model(models: &[Model]) -> Result<String, Box<dyn Error>> {
     loop {
         println!("\nAvailable models:");
         for (i, m) in models.iter().enumerate() {
-            println!(" {}) {}", i+1, m.id);
+            println!(" {}) {}", i + 1, m.id);
         }
 
         print!("Select a model [1-{}]:", models.len());
@@ -99,10 +92,8 @@ fn select_model(models: &[Model])-> Result<String, Box<dyn Error>> {
         match input.trim().parse::<usize>() {
             Ok(n) if (1..=models.len()).contains(&n) => {
                 return Ok(models[n - 1].id.clone());
-            },
+            }
             _ => println!("Invalid selection, try again"),
         }
     }
 }
-
-   
