@@ -3,10 +3,28 @@ pub struct Model {
     pub id: String,
 }
 
+pub struct ToolParameterProperty {
+    pub name: String,
+    pub property_type: String,
+    pub description: String,
+    pub property_enum: Option<Vec<String>>,
+}
+
+pub struct ToolParameters {
+    pub properties: Vec<ToolParameterProperty>, 
+    pub required: Vec<String>,
+}
+
+pub struct Tool {
+    pub name: String,
+    pub description: String,
+    pub parameters: ToolParameters,
+}
+
 pub struct CompletionRequest<'a> {
     pub model: String,
     pub messages: &'a [Message],
-    pub stream: bool,
+    pub tools: Option<Vec<Tool>>,
 }
 
 pub struct CompletionResponse {

@@ -12,7 +12,6 @@ toml = "1.1.2"
 futures = "0.3"
 serde_json = "1.0.149"
 reqwest = { version = "0.13.3", features = ["stream"] }
-error = "0.1.9"
 async-stream = "0.3.6"
 futures-core = "0.3.32"
 futures-util = "0.3.32"

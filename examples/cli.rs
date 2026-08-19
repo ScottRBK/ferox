@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::io::{self, Write};
+use std::io::{self, Write, IsTerminal};
 
 use futures_util::pin_mut;
 use futures_util::StreamExt;
@@ -17,10 +17,10 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         .build()?;
 
     let gateway = Gateway::new(client);
-    repl(gateway, true).await
+    repl(gateway).await
 }
 
-async fn repl<P>(gateway: Gateway<P>, stream: bool) -> Result<(), Box<dyn Error + Send + Sync>> 
+async fn repl<P>(gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>> 
 where 
     P: LlmProvider 
 {
@@ -42,6 +42,10 @@ where
     P: LlmProvider 
 {
     let mut messages = Vec::<Message>::new();
+    let tty = std::io::stdout().is_terminal();
+    let dim = if tty {"\x1b[90m"} else { "" };
+    let reset = if tty {"\x1b[0m"} else { "" };
+
 
     loop {
         let mut user_input = String::new();
@@ -61,22 +65,46 @@ where
         let stream = gateway.stream(CompletionRequest{
             model: model.id.clone(),
             messages: &messages,
-            stream: true, 
+            tools: None,
         }).await?;
 
         pin_mut!(stream);
 
+        let mut seen_reasoning = false;
+        let mut seen_agent_response = false;
+        let mut agent_response = String::new();
+
         while let Some(completion) = stream.next().await {
             match completion {
                 Ok(completion) => {
+
+                    if let Some(response) = &completion.reasoning {
+                        if !seen_reasoning {
+                            println!["REASONING"];
+                            println!();
+                            seen_reasoning = true;
+                        }
+
+                        print!("{dim}{}", response);
+                        std::io::Write::flush(&mut  std::io::stdout())?; 
+                    }
+
                     if let Some(response) = &completion.text {
+                        if !seen_agent_response && seen_reasoning {
+                            println!();
+                            println!["{reset}AGENT RESPONSE:"];
+                            println!();
+                            seen_agent_response = true;
+                        }
                         print!("{}", response);
                         std::io::Write::flush(&mut  std::io::stdout())?; 
+                        agent_response.push_str(response);
                     }
                 }
                 Err(e) => println!("Error fetching response from provier {}", e)
             }
         }
+        messages.push(Message::Assistant { content: (agent_response) });
         println!();
     }
     Ok(())

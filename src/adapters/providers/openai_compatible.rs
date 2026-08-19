@@ -1,7 +1,16 @@
 use crate::{
     error::LlmError,
-    models::{CompletionChunk, CompletionRequest, CompletionResponse, Message, Model},
-    ports::llm::LlmProvider,
+    models::{
+        CompletionChunk, 
+        CompletionRequest, 
+        CompletionResponse, 
+        Message, 
+        Model, 
+        Tool, 
+        ToolParameters,
+        ToolParameterProperty,
+    },
+    ports::llm::LlmProvider
 };
 use async_stream::try_stream;
 use futures_core::stream::Stream;
@@ -13,6 +22,7 @@ use std::error::Error;
 use std::pin::Pin;
 use std::time::Duration;
 use std::fmt;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum OpenAiClientError {
@@ -75,6 +85,7 @@ pub enum ChatCompletionsMessage {
 }
 
 impl ChatCompletionsMessage {
+
     pub fn content(&self) -> &str {
         match self {
             ChatCompletionsMessage::System { content } => content,
@@ -94,10 +105,42 @@ impl ChatCompletionsMessage {
 }
 
 #[derive(Serialize, Debug)]
+pub struct ChatCompletionToolParameterProperty {
+    #[serde(rename= "type")]
+    pub property_type: String,
+    pub description: String,
+    #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
+    pub property_enum: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ChatCompletionToolParameters {
+    #[serde(rename= "type")]
+    pub parameter_type: String,
+    pub properties: HashMap<String, ChatCompletionToolParameterProperty>, 
+    pub required: Vec<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ChatCompletionTool {
+    #[serde(rename= "type")]
+    pub tool_type: String, 
+    pub function: ChatCompletionFunction,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ChatCompletionFunction {
+    pub name: String,
+    pub description: String,
+    pub parameters: ChatCompletionToolParameters,
+}
+
+#[derive(Serialize, Debug)]
 pub struct ChatCompletionsRequest {
     pub model: String,
     pub messages: Vec<ChatCompletionsMessage>,
     pub stream: bool,
+    pub tools: Option<Vec<ChatCompletionTool>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -107,7 +150,6 @@ pub enum ChoicesFinishReason {
     Length,
     ToolCalls,
     ContentFilter,
-    FunctionCall, // Deprecated
 }
 
 #[derive(Deserialize, Debug)]
@@ -160,7 +202,7 @@ impl OpenAiCompatibleClientBuilder {
         Self {
             base_url: None,
             api_key: None,
-            timeout: Duration::from_secs(240),
+            timeout: Duration::from_secs(120),
         }
     }
 
@@ -182,7 +224,7 @@ impl OpenAiCompatibleClientBuilder {
     pub fn build(self) -> Result<OpenAiCompatibleClient, ClientBuildError> {
         let base_url = self.base_url.ok_or(ClientBuildError::MissingBaseUrl)?;
         let http = Client::builder()
-            .timeout(self.timeout)
+            .read_timeout(self.timeout)
             .build()
             .map_err(ClientBuildError::HttpClient)?; 
 
@@ -356,6 +398,41 @@ fn to_provider_message(message: &Message) -> ChatCompletionsMessage {
     }
 }
 
+fn to_provider_tools(tool: Tool) -> ChatCompletionTool{
+    ChatCompletionTool {
+        tool_type: String::from("function"),
+        function: ChatCompletionFunction {
+            name: tool.name,
+            description: tool.description,
+            parameters: to_provider_parameters(tool.parameters),
+        }
+    }
+}
+
+fn to_provider_parameters(parameter: ToolParameters) -> ChatCompletionToolParameters {
+    ChatCompletionToolParameters {
+        parameter_type: String::from("object"),
+        properties: parameter.properties
+            .into_iter()
+            .map(to_provider_parameter_property)
+            .collect(),
+        required: parameter.required,
+    }
+}
+
+fn to_provider_parameter_property(property: ToolParameterProperty) -> 
+    (String, ChatCompletionToolParameterProperty) {
+    (
+        property.name, 
+        ChatCompletionToolParameterProperty { 
+            property_type: property.property_type.to_string(), 
+            description: property.description.to_string(), 
+            property_enum: property.property_enum, 
+        }
+    )
+}
+
+
 fn to_llm_error(error: OpenAiClientError) -> LlmError {
     match error {
         OpenAiClientError::Transport(err) if err.is_timeout() => LlmError::Timeout,
@@ -398,6 +475,9 @@ impl LlmProvider for OpenAiCompatibleClient {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
             stream: false,
+            tools: request.tools.map(|tools| {
+                tools.into_iter().map(to_provider_tools).collect()
+            }),
         };
 
         let response = self
@@ -423,11 +503,13 @@ impl LlmProvider for OpenAiCompatibleClient {
         &self,
         request: CompletionRequest<'_>,
     ) -> Result<Self::CompletionStream, LlmError> {
-
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
             stream: true,
+            tools: request.tools.map(|tools| {
+                tools.into_iter().map(to_provider_tools).collect()
+            }),
         };
 
         let response = self
