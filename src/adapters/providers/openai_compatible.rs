@@ -666,4 +666,58 @@ mod tests {
         //Assert
         assert_eq!(content, "Hey! How can I help you today? 😊");
     }
+
+    #[test]
+    fn tool_serializes_to_openai_function_schema() {
+        // Arrange
+        let tool = Tool {
+            name: "get_weather".into(),
+            description: "Get the current weather".into(),
+            parameters: ToolParameters {
+                properties: vec![
+                    ToolParameterProperty {
+                        name: "location".into(),
+                        property_type: "string".into(),
+                        description: "City and state".into(),
+                        property_enum: None,
+                    },
+                    ToolParameterProperty {
+                        name: "unit".into(),
+                        property_type: "string".into(),
+                        description: "Temp unit".into(),
+                        property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
+                    },
+                ],
+                required: vec!["location".into()],
+            },
+        };
+
+        // Act
+        let json = serde_json::to_value(&to_provider_tools(tool)).unwrap();
+
+        // Assert — copied from the OpenAI docs, not from our structs
+        let expected = serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "City and state"
+                        },
+                        "unit": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"],
+                            "description": "Temp unit"
+                        }
+                    },
+                    "required": ["location"]
+                }
+            }
+        });
+        assert_eq!(json, expected);
+    }
 }
