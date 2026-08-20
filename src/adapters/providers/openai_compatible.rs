@@ -566,19 +566,6 @@ mod tests {
     const RESPONSE_FIXUTRE_STREAM: &str =
         include_str!("../fixtures/chat_completions_response_stream.json");
 
-    //TODO: revisit these tests and split into proper integration versus e2e tests.
-
-    #[tokio::test]
-    async fn test_list_models_returns_ok() {
-        let client = OpenAiCompatibleClient::builder()
-            .base_url("http://192.168.1.202:8080/v1")
-            .build()
-            .unwrap();
-
-        let body = client.list_models().await.unwrap();
-        assert!(!body.is_empty());
-    }
-
     #[test]
     fn test_deserialise_models() {
         let models = OpenAiCompatibleClient::parse_models(MODELS_FIXTURE).unwrap();

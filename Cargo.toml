@@ -16,3 +16,14 @@ async-stream = "0.3.6"
 futures-core = "0.3.32"
 futures-util = "0.3.32"
 http = "1.4.1"
+
+[dev-dependencies]
+wiremock = "0.6.5"
+
+[features]
+e2e-tests = []
+
+[[test]]
+name = "e2e"
+path = "tests/e2e.rs"
+required-features = ["e2e-tests"]

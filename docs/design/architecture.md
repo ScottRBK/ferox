@@ -5,7 +5,7 @@ that comes with having the possbility of using multiple LLM providers in a singl
 Ferox utilises my preferred hexagonal structure (often refered to as Ports and Adapters). 
 
 - Ports - These are Traits what i would have previously defined as Protcols in Python, they express 
-        what the application needs or exposes.
+what the application needs or exposes.
 - Adapters - These are concrete imple─lemtations of these traits
 - Services - Business uses cases that depend on the protocols - for this solution which is quite 
 small then this is just the `gateway.rs` which describes the domain logic for interacting with LLMs
@@ -27,5 +27,14 @@ crate these would not be utilised here, they would be used in a consuming applic
    │       └── providers/
    │            └── anthropic.rs
    │            └── openai.rs
+   ├── tests/
+   │    ├── integration/ 
+   │    └── e2e/   
    └── Cargo.toml
  ```
+### Test Approach
+1. Unit Tests - module tests held within a related file/module they are validating behaviour on
+1. Integration Tests - held within the `tests/integration` folder, test the seams between modules without
+invoking actual interface boundaries
+1. e2e Tests - held within the `tests/e2e` folder,  tests that test a full e2e user journey, invoke
+the interface boundaries, eg/ make actual model calls

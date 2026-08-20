@@ -7,12 +7,14 @@ use futures_util::StreamExt;
 use ferox::adapters::providers::openai_compatible::{OpenAiCompatibleClient};
 use ferox::ports::llm::LlmProvider;
 use ferox::gateway::Gateway;
-use ferox::models::{Model, CompletionRequest, CompletionResponse, CompletionChunk, Message};
+use ferox::models::{Model, CompletionRequest, Message};
+
+const BASE_URL: &str = "http://192.168.1.202:8080/v1";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = OpenAiCompatibleClient::builder()
-        .base_url("http://192.168.1.202:8080/v1")
+        .base_url(BASE_URL)
         .api_key("")
         .build()?;
 
@@ -37,6 +39,17 @@ where
     Ok(())
 }
 
+async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
+    let mut user_input = String::new();
+    print!("> ");
+    io::stdout().flush()?;
+    io::stdin()
+        .read_line(&mut user_input)
+        .expect("Error reading input");
+
+    Ok(user_input)
+}
+
 async fn chat_session<P>(model: &Model, gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>> 
 where 
     P: LlmProvider 
@@ -48,13 +61,8 @@ where
 
 
     loop {
-        let mut user_input = String::new();
-        print!("> ");
-        io::stdout().flush()?;
-        io::stdin()
-            .read_line(&mut user_input)
-            .expect("Error reading input");
-
+         
+        let user_input = get_user_input().await?;
 
         match user_input.trim() {
             "q" => break,
@@ -62,6 +70,7 @@ where
                 messages.push(Message::User{content: user_input.trim().into()});
             }
         }
+
         let stream = gateway.stream(CompletionRequest{
             model: model.id.clone(),
             messages: &messages,
