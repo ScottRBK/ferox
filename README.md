@@ -8,7 +8,6 @@ upstream consumers.
 ## Development Roadmap 
 
 - [ ] OpenAI Compatible Chat Completions endpoint 
-- [ ] Basic Settings & Config
 - [ ] Basic Logging 
 - [ ] Provider Configuration
 - [ ] Open Telemtry and Advanced Logging

@@ -32,9 +32,4 @@ crate these would not be utilised here, they would be used in a consuming applic
    │    └── e2e/   
    └── Cargo.toml
  ```
-### Test Approach
-1. Unit Tests - module tests held within a related file/module they are validating behaviour on
-1. Integration Tests - held within the `tests/integration` folder, test the seams between modules without
-invoking actual interface boundaries
-1. e2e Tests - held within the `tests/e2e` folder,  tests that test a full e2e user journey, invoke
-the interface boundaries, eg/ make actual model calls
+
