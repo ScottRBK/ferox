@@ -1,6 +1,6 @@
 use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::gateway::Gateway;
-use ferox::models::{CompletionRequest, Message, Tool, ToolParameterProperty, ToolParameters};
+use ferox::models::{CompletionRequest, Message, Tool, ToolParameterProperty};
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -99,40 +99,29 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
         },
     ];
     let tools = vec![
-        Tool {
-            name: "get_weather".into(),
-            description: "Get the current weather for a location".into(),
-            parameters: ToolParameters {
-                properties: vec![
-                    ToolParameterProperty {
-                        name: "location".into(),
-                        property_type: "string".into(),
-                        description: "City and country".into(),
-                        property_enum: None,
-                    },
-                    ToolParameterProperty {
-                        name: "unit".into(),
-                        property_type: "string".into(),
-                        description: "Temperature unit".into(),
-                        property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
-                    },
-                ],
-                required: vec!["location".into()],
-            },
-        },
-        Tool {
-            name: "get_current_time".into(),
-            description: "Get the current time for a timezone".into(),
-            parameters: ToolParameters {
-                properties: vec![ToolParameterProperty {
-                    name: "timezone".into(),
-                    property_type: "string".into(),
-                    description: "IANA timezone".into(),
-                    property_enum: None,
-                }],
-                required: vec!["timezone".into()],
-            },
-        },
+        Tool::new(
+            "get_weather",
+            "Get the current weather for a location",
+        )
+        .required_parameter(ToolParameterProperty {
+            name: "location".into(),
+            property_type: "string".into(),
+            description: "City and country".into(),
+            property_enum: None,
+        })
+        .optional_parameter(ToolParameterProperty {
+            name: "unit".into(),
+            property_type: "string".into(),
+            description: "Temperature unit".into(),
+            property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
+        }),
+        Tool::new("get_current_time", "Get the current time for a timezone")
+            .required_parameter(ToolParameterProperty {
+                name: "timezone".into(),
+                property_type: "string".into(),
+                description: "IANA timezone".into(),
+                property_enum: None,
+            }),
     ];
 
     // Act

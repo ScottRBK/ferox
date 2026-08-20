@@ -7,7 +7,14 @@ use futures_util::StreamExt;
 use ferox::adapters::providers::openai_compatible::{OpenAiCompatibleClient};
 use ferox::ports::llm::LlmProvider;
 use ferox::gateway::Gateway;
-use ferox::models::{Model, CompletionRequest, Message};
+use ferox::models::{
+    Model, 
+    CompletionRequest, 
+    Message,
+    Tool,
+    ToolParameters, 
+    ToolParameterProperty,
+};
 
 const BASE_URL: &str = "http://192.168.1.202:8080/v1";
 
@@ -37,6 +44,11 @@ where
     chat_session(selected_model, gateway).await?;
 
     Ok(())
+}
+
+
+fn build_tools() -> Vec<Tool> {
+ vec![Tool::new("get_current_datetime", "gets the current date and time")]
 }
 
 async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -74,7 +86,7 @@ where
         let stream = gateway.stream(CompletionRequest{
             model: model.id.clone(),
             messages: &messages,
-            tools: None,
+            tools: Some(build_tools()),
         }).await?;
 
         pin_mut!(stream);

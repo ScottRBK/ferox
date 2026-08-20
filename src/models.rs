@@ -18,7 +18,43 @@ pub struct ToolParameters {
 pub struct Tool {
     pub name: String,
     pub description: String,
-    pub parameters: ToolParameters,
+    pub parameters: Option<ToolParameters>,
+}
+
+impl Tool {
+    pub fn new (
+        name: impl Into<String>,
+        description: impl Into<String>, 
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters: None,
+     }        
+    }
+
+    pub fn required_parameter (self, parameter_property: ToolParameterProperty) -> Self {
+        self.parameter(parameter_property, true)
+    }
+    
+    pub fn optional_parameter (self, parameter_property: ToolParameterProperty) -> Self {
+        self.parameter(parameter_property, false)
+    }
+    fn parameter (mut self, parameter_property: ToolParameterProperty, required: bool) -> Self {
+
+        let parameters = self.parameters.get_or_insert_with(|| ToolParameters {
+            properties: Vec::new(),
+            required: Vec::new(),
+        });
+
+        if required {
+            parameters.required.push(parameter_property.name.clone());
+        }
+
+        parameters.properties.push(parameter_property);
+
+        self 
+    }
 }
 
 pub struct CompletionRequest<'a> {

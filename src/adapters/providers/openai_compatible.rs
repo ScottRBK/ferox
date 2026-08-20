@@ -132,7 +132,8 @@ pub struct ChatCompletionTool {
 pub struct ChatCompletionFunction {
     pub name: String,
     pub description: String,
-    pub parameters: ChatCompletionToolParameters,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<ChatCompletionToolParameters>,
 }
 
 #[derive(Serialize, Debug)]
@@ -404,7 +405,7 @@ fn to_provider_tools(tool: Tool) -> ChatCompletionTool{
         function: ChatCompletionFunction {
             name: tool.name,
             description: tool.description,
-            parameters: to_provider_parameters(tool.parameters),
+            parameters: tool.parameters.map(to_provider_parameters),
         }
     }
 }
@@ -657,30 +658,22 @@ mod tests {
     #[test]
     fn tool_serializes_to_openai_function_schema() {
         // Arrange
-        let tool = Tool {
-            name: "get_weather".into(),
-            description: "Get the current weather".into(),
-            parameters: ToolParameters {
-                properties: vec![
-                    ToolParameterProperty {
-                        name: "location".into(),
-                        property_type: "string".into(),
-                        description: "City and state".into(),
-                        property_enum: None,
-                    },
-                    ToolParameterProperty {
-                        name: "unit".into(),
-                        property_type: "string".into(),
-                        description: "Temp unit".into(),
-                        property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
-                    },
-                ],
-                required: vec!["location".into()],
-            },
-        };
+        let tool = Tool::new("get_weather", "Get the current weather")
+            .required_parameter(ToolParameterProperty {
+                name: "location".into(),
+                property_type: "string".into(),
+                description: "City and state".into(),
+                property_enum: None,
+            })
+            .optional_parameter(ToolParameterProperty {
+                name: "unit".into(),
+                property_type: "string".into(),
+                description: "Temp unit".into(),
+                property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
+            });
 
         // Act
-        let json = serde_json::to_value(&to_provider_tools(tool)).unwrap();
+        let json = serde_json::to_value(to_provider_tools(tool)).unwrap();
 
         // Assert — copied from the OpenAI docs, not from our structs
         let expected = serde_json::json!({
@@ -703,6 +696,25 @@ mod tests {
                     },
                     "required": ["location"]
                 }
+            }
+        });
+        assert_eq!(json, expected);
+    }
+
+    #[test]
+    fn parameterless_tool_omits_parameters_from_openai_function_schema() {
+        // Arrange
+        let tool = Tool::new("get_system_status", "Get the current system status");
+
+        // Act
+        let json = serde_json::to_value(to_provider_tools(tool)).unwrap();
+
+        // Assert — OpenAI defines omitted parameters as an empty parameter list
+        let expected = serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "get_system_status",
+                "description": "Get the current system status"
             }
         });
         assert_eq!(json, expected);
