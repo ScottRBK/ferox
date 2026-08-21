@@ -12,8 +12,8 @@ use ferox::models::{
     CompletionRequest, 
     Message,
     Tool,
-    ToolParameters, 
     ToolParameterProperty,
+    ToolParameterPropertyType,
 };
 
 const BASE_URL: &str = "http://192.168.1.202:8080/v1";
@@ -48,7 +48,26 @@ where
 
 
 fn build_tools() -> Vec<Tool> {
- vec![Tool::new("get_current_datetime", "gets the current date and time")]
+ vec![
+     Tool::new("get_current_datetime", "gets the current date and time"),
+     Tool::new("add_two_numbers", "adds two numbers together")
+         .required_parameter(
+             ToolParameterProperty {
+                 name: String::from("first_number"),
+                 property_type: ToolParameterPropertyType::Integer,
+                 description: String::from("first number to be added"),
+                 property_enum: None,
+             }
+         )
+         .required_parameter(
+             ToolParameterProperty {
+                 name: String::from("second_number"),
+                 property_type: ToolParameterPropertyType::Integer,
+                 description: String::from("second number to be added"),
+                 property_enum: None,
+             }
+         )
+]
 }
 
 async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {

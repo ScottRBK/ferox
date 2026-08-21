@@ -3,15 +3,23 @@ pub struct Model {
     pub id: String,
 }
 
+pub enum ToolParameterPropertyType {
+    String,
+    Number,
+    Integer,
+    Boolean,
+    // TODO: Need to add support for Object and Array types
+}
+
 pub struct ToolParameterProperty {
     pub name: String,
-    pub property_type: String,
+    pub property_type: ToolParameterPropertyType,
     pub description: String,
     pub property_enum: Option<Vec<String>>,
 }
 
 pub struct ToolParameters {
-    pub properties: Vec<ToolParameterProperty>, 
+    pub properties: Vec<ToolParameterProperty>,
     pub required: Vec<String>,
 }
 
@@ -22,26 +30,23 @@ pub struct Tool {
 }
 
 impl Tool {
-    pub fn new (
-        name: impl Into<String>,
-        description: impl Into<String>, 
-    ) -> Self {
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             description: description.into(),
             parameters: None,
-     }        
+        }
     }
 
-    pub fn required_parameter (self, parameter_property: ToolParameterProperty) -> Self {
+    pub fn required_parameter(self, parameter_property: ToolParameterProperty) -> Self {
         self.parameter(parameter_property, true)
     }
-    
-    pub fn optional_parameter (self, parameter_property: ToolParameterProperty) -> Self {
+
+    pub fn optional_parameter(self, parameter_property: ToolParameterProperty) -> Self {
         self.parameter(parameter_property, false)
     }
-    fn parameter (mut self, parameter_property: ToolParameterProperty, required: bool) -> Self {
 
+    fn parameter(mut self, parameter_property: ToolParameterProperty, required: bool) -> Self {
         let parameters = self.parameters.get_or_insert_with(|| ToolParameters {
             properties: Vec::new(),
             required: Vec::new(),
@@ -53,7 +58,7 @@ impl Tool {
 
         parameters.properties.push(parameter_property);
 
-        self 
+        self
     }
 }
 

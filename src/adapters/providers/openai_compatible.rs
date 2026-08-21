@@ -9,6 +9,7 @@ use crate::{
         Tool, 
         ToolParameters,
         ToolParameterProperty,
+        ToolParameterPropertyType,
     },
     ports::llm::LlmProvider
 };
@@ -105,9 +106,19 @@ impl ChatCompletionsMessage {
 }
 
 #[derive(Serialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatCompletionToolParameterPropertyType {
+    String,
+    Number,
+    Integer,
+    Boolean,
+    // TODO: Need to add support for Object and Array types
+}
+
+#[derive(Serialize, Debug)]
 pub struct ChatCompletionToolParameterProperty {
     #[serde(rename= "type")]
-    pub property_type: String,
+    pub property_type: ChatCompletionToolParameterPropertyType,
     pub description: String,
     #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
     pub property_enum: Option<Vec<String>>,
@@ -426,13 +437,23 @@ fn to_provider_parameter_property(property: ToolParameterProperty) ->
     (
         property.name, 
         ChatCompletionToolParameterProperty { 
-            property_type: property.property_type.to_string(), 
+            property_type:to_provider_property_type(property.property_type),
             description: property.description.to_string(), 
             property_enum: property.property_enum, 
         }
     )
 }
 
+fn to_provider_property_type(
+    property_type: ToolParameterPropertyType,
+) -> ChatCompletionToolParameterPropertyType {
+    match property_type {
+        ToolParameterPropertyType::String => ChatCompletionToolParameterPropertyType::String,
+        ToolParameterPropertyType::Number => ChatCompletionToolParameterPropertyType::Number,
+        ToolParameterPropertyType::Integer => ChatCompletionToolParameterPropertyType::Integer,
+        ToolParameterPropertyType::Boolean => ChatCompletionToolParameterPropertyType::Boolean,
+    }
+}
 
 fn to_llm_error(error: OpenAiClientError) -> LlmError {
     match error {
@@ -661,13 +682,13 @@ mod tests {
         let tool = Tool::new("get_weather", "Get the current weather")
             .required_parameter(ToolParameterProperty {
                 name: "location".into(),
-                property_type: "string".into(),
+                property_type: ToolParameterPropertyType::String,
                 description: "City and state".into(),
                 property_enum: None,
             })
             .optional_parameter(ToolParameterProperty {
                 name: "unit".into(),
-                property_type: "string".into(),
+                property_type: ToolParameterPropertyType::String,
                 description: "Temp unit".into(),
                 property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
             });
@@ -699,6 +720,26 @@ mod tests {
             }
         });
         assert_eq!(json, expected);
+    }
+
+    #[test]
+    fn property_types_serialize_to_openai_json_schema_values() {
+        // Arrange
+        let cases = [
+            (ToolParameterPropertyType::String, "string"),
+            (ToolParameterPropertyType::Number, "number"),
+            (ToolParameterPropertyType::Integer, "integer"),
+            (ToolParameterPropertyType::Boolean, "boolean"),
+        ];
+
+        for (property_type, expected) in cases {
+            // Act
+            let provider_type = to_provider_property_type(property_type);
+            let json = serde_json::to_value(provider_type).unwrap();
+
+            // Assert
+            assert_eq!(json, serde_json::json!(expected));
+        }
     }
 
     #[test]
