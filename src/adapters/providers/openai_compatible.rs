@@ -7,6 +7,7 @@ use crate::{
         Message, 
         Model, 
         Tool, 
+        ToolCall,
         ToolParameters,
         ToolParameterProperty,
         ToolParameterPropertyType,
@@ -69,9 +70,22 @@ struct ModelsResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChatCompletionToolCallFunction {
+    name: String,
+    arguments: String,
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChatCompletionToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    tool_type: String,
+    function: ChatCompletionToolCallFunction,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "role")]
 #[serde(rename_all = "lowercase")]
-pub enum ChatCompletionsMessage {
+pub enum ChatCompletionsMessageRequest {
     System {
         content: String,
     },
@@ -79,30 +93,89 @@ pub enum ChatCompletionsMessage {
         content: String,
     },
     Assistant {
-        content: String,
+        content: Option<String>,
+        tool_calls: Vec<ChatCompletionToolCall>,
         #[serde(skip_serializing_if = "Option::is_none")]
         reasoning_content: Option<String>,
     },
+    Tool {
+        tool_call_id: String,
+        content: String,
+    },
 }
 
-impl ChatCompletionsMessage {
+impl ChatCompletionsMessageRequest {
 
-    pub fn content(&self) -> &str {
+    pub fn content(&self) -> Option<&str> {
         match self {
-            ChatCompletionsMessage::System { content } => content,
-            ChatCompletionsMessage::User { content } => content,
-            ChatCompletionsMessage::Assistant { content, .. } => content,
+            ChatCompletionsMessageRequest::System { content } => Some(content),
+            ChatCompletionsMessageRequest::User { content } => Some(content),
+            ChatCompletionsMessageRequest::Assistant { content, .. } => content.as_deref(),
+            ChatCompletionsMessageRequest::Tool { content, .. } => Some(content), 
         }
     }
 
-    pub fn reasoning_content(&self) -> Option<&str> {
+   pub fn reasoning_content(&self) -> Option<&str> {
         match self {
-            ChatCompletionsMessage::Assistant {
+            ChatCompletionsMessageRequest::Assistant {
                 reasoning_content, ..
             } => reasoning_content.as_deref(),
             _ => None,
         }
     }
+
+    pub fn tool_calls(&self) -> &[ChatCompletionToolCall] {
+        match self { 
+            ChatCompletionsMessageRequest::Assistant { tool_calls, .. } => tool_calls,
+            _ => &[],
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "role")]
+#[serde(rename_all = "lowercase")]
+pub enum ChatCompletionsMessageResponse {
+    System {
+        content: String,
+    },
+    User {
+        content: String,
+    },
+    Assistant {
+        content: Option<String>,
+        #[serde(default)]
+        tool_calls: Vec<ChatCompletionToolCall>,
+        reasoning_content: Option<String>,
+    },
+}
+
+impl ChatCompletionsMessageResponse {
+
+    pub fn content(&self) -> Option<&str> {
+        match self {
+            ChatCompletionsMessageResponse::System { content } => Some(content),
+            ChatCompletionsMessageResponse::User { content } => Some(content),
+            ChatCompletionsMessageResponse::Assistant { content, .. } => content.as_deref(),
+        }
+    }
+
+    pub fn reasoning_content(&self) -> Option<&str> {
+        match self {
+            ChatCompletionsMessageResponse::Assistant {
+                reasoning_content, ..
+            } => reasoning_content.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn tool_calls(&self) -> &[ChatCompletionToolCall] {
+        match self {
+            ChatCompletionsMessageResponse::Assistant { tool_calls, .. } => tool_calls,
+            _ => &[],
+        }
+    }
+
 }
 
 #[derive(Serialize, Debug)]
@@ -150,7 +223,7 @@ pub struct ChatCompletionFunction {
 #[derive(Serialize, Debug)]
 pub struct ChatCompletionsRequest {
     pub model: String,
-    pub messages: Vec<ChatCompletionsMessage>,
+    pub messages: Vec<ChatCompletionsMessageRequest>,
     pub stream: bool,
     pub tools: Option<Vec<ChatCompletionTool>>,
 }
@@ -168,7 +241,7 @@ pub enum ChoicesFinishReason {
 pub struct ChatCompletionChoices {
     pub finish_reason: ChoicesFinishReason,
     pub index: i32,
-    pub message: ChatCompletionsMessage,
+    pub message: ChatCompletionsMessageResponse,
 }
 
 #[derive(Deserialize, Debug)]
@@ -279,10 +352,12 @@ impl OpenAiCompatibleClient {
         }
         Ok(body)
     }
+    
     fn parse_models(body: &str) -> Result<Vec<ProviderModel>, OpenAiClientError> {
         let response: ModelsResponse = serde_json::from_str(body).map_err(OpenAiClientError::Decode)?;
         Ok(response.data)
     }
+
     pub async fn create_chat_completion(
         &self,
         chat_request: &ChatCompletionsRequest,
@@ -395,18 +470,45 @@ impl OpenAiCompatibleClient {
     }
 }
 
-fn to_provider_message(message: &Message) -> ChatCompletionsMessage {
+fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
     match message {
-        Message::System{ content } => ChatCompletionsMessage::System {
+        Message::System{ content } => ChatCompletionsMessageRequest::System {
             content: content.clone(),
         },
-        Message::User{ content } => ChatCompletionsMessage::User {
+        Message::User{ content } => ChatCompletionsMessageRequest::User {
             content: content.clone(),
         },
-        Message::Assistant{ content } => ChatCompletionsMessage::Assistant {
+        Message::Assistant{ content, tool_calls } => ChatCompletionsMessageRequest::Assistant {
             content: content.clone(),
+            tool_calls: tool_calls
+                .iter()
+                .map(to_provider_toolcall)
+                .collect(),
             reasoning_content: None,
         },
+        Message::Tool{ tool_call_id, content } => ChatCompletionsMessageRequest::Tool {
+            tool_call_id: tool_call_id.clone(),
+            content: content.clone(),
+        },
+    }
+}
+
+fn to_domain_toolcall(tool_call: &ChatCompletionToolCall) -> ToolCall {
+    ToolCall {
+        id: tool_call.id.clone(), 
+        name: tool_call.function.name.clone(),
+        arguments: tool_call.function.arguments.clone(),
+    }
+}
+
+fn to_provider_toolcall(tool_call: &ToolCall) -> ChatCompletionToolCall {
+    ChatCompletionToolCall {
+        id: tool_call.id.to_string(), 
+        tool_type: String::from("function"),
+        function: ChatCompletionToolCallFunction {
+            name: tool_call.name.to_string(),
+            arguments: tool_call.arguments.to_string(),
+        } 
     }
 }
 
@@ -516,8 +618,9 @@ impl LlmProvider for OpenAiCompatibleClient {
 
         Ok(CompletionResponse {
             model: response.model,
-            text: choice.message.content().to_string(),
+            text: choice.message.content().map(str::to_string),
             reasoning: choice.message.reasoning_content().map(str::to_string),
+            tool_calls: choice.message.tool_calls().iter().map(to_domain_toolcall).collect(),
         })
     }
 
@@ -587,6 +690,8 @@ mod tests {
     const RESPONSE_FIXUTRE: &str = include_str!("../fixtures/chat_completions_response.json");
     const RESPONSE_FIXUTRE_STREAM: &str =
         include_str!("../fixtures/chat_completions_response_stream.json");
+    const TOOL_CALLS_FIXTURE: &str =
+        include_str!("../fixtures/chat_completions_response_tool_calls.json");
 
     #[test]
     fn test_deserialise_models() {
@@ -600,6 +705,30 @@ mod tests {
             OpenAiCompatibleClient::parse_chat_completions_response(RESPONSE_FIXUTRE).unwrap();
         assert!(!resp.model.is_empty());
         assert!(!resp.choices.is_empty());
+    }
+
+    #[test]
+    fn deserialises_tool_calls_from_response() {
+        // Arrange
+        let body = TOOL_CALLS_FIXTURE;
+
+        // Act
+        let resp =
+            OpenAiCompatibleClient::parse_chat_completions_response(body).unwrap();
+        let choice = &resp.choices[0];
+
+        // Assert
+        assert!(matches!(choice.finish_reason, ChoicesFinishReason::ToolCalls));
+
+        let tool_calls = choice.message.tool_calls();
+
+        let tool_call = tool_calls.first().expect("expected one tool call");
+        assert_eq!(tool_call.id, "call_abc123");
+        assert_eq!(tool_call.function.name, "add_two_numbers");
+        assert_eq!(
+            tool_call.function.arguments,
+            "{\"first_number\": 2, \"second_number\": 3}"
+        );
     }
 
     #[tokio::test]
@@ -696,7 +825,7 @@ mod tests {
         // Act
         let json = serde_json::to_value(to_provider_tools(tool)).unwrap();
 
-        // Assert — copied from the OpenAI docs, not from our structs
+        // Assert 
         let expected = serde_json::json!({
             "type": "function",
             "function": {

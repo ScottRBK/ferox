@@ -1,0 +1,32 @@
+{
+  "id": "chatcmpl-tool-calls-1",
+  "object": "chat.completion",
+  "created": 1778938972,
+  "model": "qwen3.6-35b",
+  "system_fingerprint": "b8833-45cac7ca7",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "tool_calls",
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_abc123",
+            "type": "function",
+            "function": {
+              "name": "add_two_numbers",
+              "arguments": "{\"first_number\": 2, \"second_number\": 3}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 96,
+    "completion_tokens": 42,
+    "total_tokens": 138
+  }
+}

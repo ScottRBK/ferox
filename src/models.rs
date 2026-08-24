@@ -70,8 +70,9 @@ pub struct CompletionRequest<'a> {
 
 pub struct CompletionResponse {
     pub model: String,
-    pub text: String,
+    pub text: Option<String>,
     pub reasoning: Option<String>,
+    pub tool_calls: Vec<ToolCall>,
 }
 
 pub struct CompletionChunk {
@@ -80,9 +81,22 @@ pub struct CompletionChunk {
     pub finished: bool,
 }
 
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: String,
+}
+
 pub enum Message {
     System {content: String},
     User {content: String},
-    Assistant {content: String},
+    Assistant { 
+        content: Option<String>, 
+        tool_calls: Vec<ToolCall>,
+    },
+    Tool {
+        tool_call_id: String,
+        content: String,
+    }
      
 }
