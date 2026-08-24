@@ -137,5 +137,5 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
         .unwrap();
 
     // Assert
-    assert_eq!(response.text, "The tools were registered.");
+    assert_eq!(response.text.as_deref(), Some("The tools were registered."));
 }

@@ -144,7 +144,10 @@ where
                 Err(e) => println!("Error fetching response from provier {}", e)
             }
         }
-        messages.push(Message::Assistant { content: (agent_response) });
+        messages.push(Message::Assistant { 
+            content: Some(agent_response),
+            tool_calls: Vec::new(),
+        });
         println!();
     }
     Ok(())
