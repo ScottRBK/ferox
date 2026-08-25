@@ -44,5 +44,10 @@ async fn model_returns_completion() {
         .unwrap();
 
     // Assert
-    assert!(response.text.as_deref().is_some_and(|text| text.contains("FEROX_E2E_OK")));
+    assert!(
+        response
+            .text
+            .as_deref()
+            .is_some_and(|text| text.contains("FEROX_E2E_OK"))
+    );
 }

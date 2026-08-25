@@ -101,29 +101,27 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
         },
     ];
     let tools = vec![
-        Tool::new(
-            "get_weather",
-            "Get the current weather for a location",
-        )
-        .required_parameter(ToolParameterProperty {
-            name: "location".into(),
-            property_type: ToolParameterPropertyType::String,
-            description: "City and country".into(),
-            property_enum: None,
-        })
-        .optional_parameter(ToolParameterProperty {
-            name: "unit".into(),
-            property_type: ToolParameterPropertyType::String,
-            description: "Temperature unit".into(),
-            property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
-        }),
-        Tool::new("get_current_time", "Get the current time for a timezone")
+        Tool::new("get_weather", "Get the current weather for a location")
             .required_parameter(ToolParameterProperty {
+                name: "location".into(),
+                property_type: ToolParameterPropertyType::String,
+                description: "City and country".into(),
+                property_enum: None,
+            })
+            .optional_parameter(ToolParameterProperty {
+                name: "unit".into(),
+                property_type: ToolParameterPropertyType::String,
+                description: "Temperature unit".into(),
+                property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
+            }),
+        Tool::new("get_current_time", "Get the current time for a timezone").required_parameter(
+            ToolParameterProperty {
                 name: "timezone".into(),
                 property_type: ToolParameterPropertyType::String,
                 description: "IANA timezone".into(),
                 property_enum: None,
-            }),
+            },
+        ),
     ];
 
     // Act

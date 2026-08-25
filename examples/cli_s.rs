@@ -1,20 +1,15 @@
 use std::error::Error;
-use std::io::{self, Write, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 
-use futures_util::pin_mut;
 use futures_util::StreamExt;
+use futures_util::pin_mut;
 
-use ferox::adapters::providers::openai_compatible::{OpenAiCompatibleClient};
-use ferox::ports::llm::LlmProvider;
+use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::gateway::Gateway;
 use ferox::models::{
-    Model, 
-    CompletionRequest, 
-    Message,
-    Tool,
-    ToolParameterProperty,
-    ToolParameterPropertyType,
+    CompletionRequest, Message, Model, Tool, ToolParameterProperty, ToolParameterPropertyType,
 };
+use ferox::ports::llm::LlmProvider;
 
 const BASE_URL: &str = "http://192.168.1.202:8080/v1";
 
@@ -29,16 +24,15 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     repl(gateway).await
 }
 
-async fn repl<P>(gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>> 
-where 
-    P: LlmProvider 
+async fn repl<P>(gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    P: LlmProvider,
 {
-
     println!["Welcome to an example of the ferox libary (press q to quit)"];
 
     let models = gateway.list_models().await?;
-    let selected_model = select_models(&models).await?;  
-     
+    let selected_model = select_models(&models).await?;
+
     println!["selected model: {}", selected_model.id];
 
     chat_session(selected_model, gateway).await?;
@@ -46,28 +40,23 @@ where
     Ok(())
 }
 
-
 fn build_tools() -> Vec<Tool> {
- vec![
-     Tool::new("get_current_datetime", "gets the current date and time"),
-     Tool::new("add_two_numbers", "adds two numbers together")
-         .required_parameter(
-             ToolParameterProperty {
-                 name: String::from("first_number"),
-                 property_type: ToolParameterPropertyType::Integer,
-                 description: String::from("first number to be added"),
-                 property_enum: None,
-             }
-         )
-         .required_parameter(
-             ToolParameterProperty {
-                 name: String::from("second_number"),
-                 property_type: ToolParameterPropertyType::Integer,
-                 description: String::from("second number to be added"),
-                 property_enum: None,
-             }
-         )
-]
+    vec![
+        Tool::new("get_current_datetime", "gets the current date and time"),
+        Tool::new("add_two_numbers", "adds two numbers together")
+            .required_parameter(ToolParameterProperty {
+                name: String::from("first_number"),
+                property_type: ToolParameterPropertyType::Integer,
+                description: String::from("first number to be added"),
+                property_enum: None,
+            })
+            .required_parameter(ToolParameterProperty {
+                name: String::from("second_number"),
+                property_type: ToolParameterPropertyType::Integer,
+                description: String::from("second number to be added"),
+                property_enum: None,
+            }),
+    ]
 }
 
 async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -81,32 +70,37 @@ async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
     Ok(user_input)
 }
 
-async fn chat_session<P>(model: &Model, gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>> 
-where 
-    P: LlmProvider 
+async fn chat_session<P>(
+    model: &Model,
+    gateway: Gateway<P>,
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    P: LlmProvider,
 {
     let mut messages = Vec::<Message>::new();
     let tty = std::io::stdout().is_terminal();
-    let dim = if tty {"\x1b[90m"} else { "" };
-    let reset = if tty {"\x1b[0m"} else { "" };
-
+    let dim = if tty { "\x1b[90m" } else { "" };
+    let reset = if tty { "\x1b[0m" } else { "" };
 
     loop {
-         
         let user_input = get_user_input().await?;
 
         match user_input.trim() {
             "q" => break,
             _ => {
-                messages.push(Message::User{content: user_input.trim().into()});
+                messages.push(Message::User {
+                    content: user_input.trim().into(),
+                });
             }
         }
 
-        let stream = gateway.stream(CompletionRequest{
-            model: model.id.clone(),
-            messages: &messages,
-            tools: Some(build_tools()),
-        }).await?;
+        let stream = gateway
+            .stream(CompletionRequest {
+                model: model.id.clone(),
+                messages: &messages,
+                tools: Some(build_tools()),
+            })
+            .await?;
 
         pin_mut!(stream);
 
@@ -117,7 +111,6 @@ where
         while let Some(completion) = stream.next().await {
             match completion {
                 Ok(completion) => {
-
                     if let Some(response) = &completion.reasoning {
                         if !seen_reasoning {
                             println!["REASONING"];
@@ -126,7 +119,7 @@ where
                         }
 
                         print!("{dim}{}", response);
-                        std::io::Write::flush(&mut  std::io::stdout())?; 
+                        std::io::Write::flush(&mut std::io::stdout())?;
                     }
 
                     if let Some(response) = &completion.text {
@@ -137,14 +130,14 @@ where
                             seen_agent_response = true;
                         }
                         print!("{}", response);
-                        std::io::Write::flush(&mut  std::io::stdout())?; 
+                        std::io::Write::flush(&mut std::io::stdout())?;
                         agent_response.push_str(response);
                     }
                 }
-                Err(e) => println!("Error fetching response from provier {}", e)
+                Err(e) => println!("Error fetching response from provier {}", e),
             }
         }
-        messages.push(Message::Assistant { 
+        messages.push(Message::Assistant {
             content: Some(agent_response),
             tool_calls: Vec::new(),
         });
@@ -155,19 +148,21 @@ where
 
 fn print_models(models: &[Model]) {
     for (i, model) in models.iter().enumerate() {
-            println!["{}. {}", i+1, model.id];
+        println!["{}. {}", i + 1, model.id];
     }
 }
- 
+
 async fn select_models(models: &[Model]) -> Result<&Model, Box<dyn Error + Send + Sync>> {
     println!("Please enter a number for a model to talk to");
-    
+
     print_models(models);
 
-    loop {    
+    loop {
         let mut user_input = String::new();
         io::stdout().flush()?;
-        io::stdin().read_line(&mut user_input).expect("error reading input");
+        io::stdin()
+            .read_line(&mut user_input)
+            .expect("error reading input");
         match user_input.trim().parse::<usize>() {
             Ok(n) if (1..=models.len()).contains(&n) => {
                 return Ok(&models[n - 1]);

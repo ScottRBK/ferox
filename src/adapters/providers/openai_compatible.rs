@@ -1,18 +1,10 @@
 use crate::{
     error::LlmError,
     models::{
-        CompletionChunk, 
-        CompletionRequest, 
-        CompletionResponse, 
-        Message, 
-        Model, 
-        Tool, 
-        ToolCall,
-        ToolParameters,
-        ToolParameterProperty,
-        ToolParameterPropertyType,
+        CompletionChunk, CompletionRequest, CompletionResponse, Message, Model, Tool, ToolCall,
+        ToolParameterProperty, ToolParameterPropertyType, ToolParameters,
     },
-    ports::llm::LlmProvider
+    ports::llm::LlmProvider,
 };
 use async_stream::try_stream;
 use futures_core::stream::Stream;
@@ -20,11 +12,11 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use std::pin::Pin;
 use std::time::Duration;
-use std::fmt;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum OpenAiClientError {
@@ -33,7 +25,6 @@ pub enum OpenAiClientError {
     Decode(serde_json::Error),
     Utf8(std::str::Utf8Error),
 }
-
 
 #[derive(Debug)]
 pub enum ClientBuildError {
@@ -105,17 +96,16 @@ pub enum ChatCompletionsMessageRequest {
 }
 
 impl ChatCompletionsMessageRequest {
-
     pub fn content(&self) -> Option<&str> {
         match self {
             ChatCompletionsMessageRequest::System { content } => Some(content),
             ChatCompletionsMessageRequest::User { content } => Some(content),
             ChatCompletionsMessageRequest::Assistant { content, .. } => content.as_deref(),
-            ChatCompletionsMessageRequest::Tool { content, .. } => Some(content), 
+            ChatCompletionsMessageRequest::Tool { content, .. } => Some(content),
         }
     }
 
-   pub fn reasoning_content(&self) -> Option<&str> {
+    pub fn reasoning_content(&self) -> Option<&str> {
         match self {
             ChatCompletionsMessageRequest::Assistant {
                 reasoning_content, ..
@@ -125,7 +115,7 @@ impl ChatCompletionsMessageRequest {
     }
 
     pub fn tool_calls(&self) -> &[ChatCompletionToolCall] {
-        match self { 
+        match self {
             ChatCompletionsMessageRequest::Assistant { tool_calls, .. } => tool_calls,
             _ => &[],
         }
@@ -151,7 +141,6 @@ pub enum ChatCompletionsMessageResponse {
 }
 
 impl ChatCompletionsMessageResponse {
-
     pub fn content(&self) -> Option<&str> {
         match self {
             ChatCompletionsMessageResponse::System { content } => Some(content),
@@ -175,7 +164,6 @@ impl ChatCompletionsMessageResponse {
             _ => &[],
         }
     }
-
 }
 
 #[derive(Serialize, Debug)]
@@ -190,7 +178,7 @@ pub enum ChatCompletionToolParameterPropertyType {
 
 #[derive(Serialize, Debug)]
 pub struct ChatCompletionToolParameterProperty {
-    #[serde(rename= "type")]
+    #[serde(rename = "type")]
     pub property_type: ChatCompletionToolParameterPropertyType,
     pub description: String,
     #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
@@ -199,16 +187,16 @@ pub struct ChatCompletionToolParameterProperty {
 
 #[derive(Serialize, Debug)]
 pub struct ChatCompletionToolParameters {
-    #[serde(rename= "type")]
+    #[serde(rename = "type")]
     pub parameter_type: String,
-    pub properties: HashMap<String, ChatCompletionToolParameterProperty>, 
+    pub properties: HashMap<String, ChatCompletionToolParameterProperty>,
     pub required: Vec<String>,
 }
 
 #[derive(Serialize, Debug)]
 pub struct ChatCompletionTool {
-    #[serde(rename= "type")]
-    pub tool_type: String, 
+    #[serde(rename = "type")]
+    pub tool_type: String,
     pub function: ChatCompletionFunction,
 }
 
@@ -311,7 +299,7 @@ impl OpenAiCompatibleClientBuilder {
         let http = Client::builder()
             .read_timeout(self.timeout)
             .build()
-            .map_err(ClientBuildError::HttpClient)?; 
+            .map_err(ClientBuildError::HttpClient)?;
 
         Ok(OpenAiCompatibleClient {
             http,
@@ -342,19 +330,23 @@ impl OpenAiCompatibleClient {
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
-        let response = req.send().await.map_err(OpenAiClientError::Transport)?; 
+        let response = req.send().await.map_err(OpenAiClientError::Transport)?;
 
-        let code = response.status().as_u16(); 
-        let body = response.text().await.map_err(OpenAiClientError::Transport)?;
+        let code = response.status().as_u16();
+        let body = response
+            .text()
+            .await
+            .map_err(OpenAiClientError::Transport)?;
 
         if !(200..300).contains(&code) {
             return Err(OpenAiClientError::Status { code, body });
         }
         Ok(body)
     }
-    
+
     fn parse_models(body: &str) -> Result<Vec<ProviderModel>, OpenAiClientError> {
-        let response: ModelsResponse = serde_json::from_str(body).map_err(OpenAiClientError::Decode)?;
+        let response: ModelsResponse =
+            serde_json::from_str(body).map_err(OpenAiClientError::Decode)?;
         Ok(response.data)
     }
 
@@ -362,7 +354,8 @@ impl OpenAiCompatibleClient {
         &self,
         chat_request: &ChatCompletionsRequest,
     ) -> Result<ChatCompletionsResponse, OpenAiClientError> {
-        let request_body = serde_json::to_string(chat_request).map_err(OpenAiClientError::Decode)?;
+        let request_body =
+            serde_json::to_string(chat_request).map_err(OpenAiClientError::Decode)?;
         let mut req = self
             .http
             .post(format!("{}/chat/completions", self.base_url))
@@ -372,11 +365,14 @@ impl OpenAiCompatibleClient {
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
- 
+
         let response = req.send().await.map_err(OpenAiClientError::Transport)?;
 
         let code = response.status().as_u16();
-        let body = response.text().await.map_err(OpenAiClientError::Transport)?;
+        let body = response
+            .text()
+            .await
+            .map_err(OpenAiClientError::Transport)?;
 
         if !(200..300).contains(&code) {
             return Err(OpenAiClientError::Status { code, body });
@@ -389,8 +385,8 @@ impl OpenAiCompatibleClient {
     fn parse_chat_completions_response(
         body: &str,
     ) -> Result<ChatCompletionsResponse, OpenAiClientError> {
-        let resp: ChatCompletionsResponse = serde_json::from_str(body)
-            .map_err(OpenAiClientError::Decode)?;
+        let resp: ChatCompletionsResponse =
+            serde_json::from_str(body).map_err(OpenAiClientError::Decode)?;
         Ok(resp)
     }
 
@@ -398,8 +394,8 @@ impl OpenAiCompatibleClient {
         &self,
         chat_request: &ChatCompletionsRequest,
     ) -> Result<reqwest::Response, OpenAiClientError> {
-        let request_body = serde_json::to_string(chat_request)
-            .map_err(OpenAiClientError::Decode)?;
+        let request_body =
+            serde_json::to_string(chat_request).map_err(OpenAiClientError::Decode)?;
 
         let mut req = self
             .http
@@ -410,13 +406,15 @@ impl OpenAiCompatibleClient {
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
- 
+
         let response = req.send().await.map_err(OpenAiClientError::Transport)?;
 
         Ok(response)
     }
 
-    fn handle_sse_line(line: &str) -> Option<Result<ChatCompletionsStreamResponse, OpenAiClientError>> {
+    fn handle_sse_line(
+        line: &str,
+    ) -> Option<Result<ChatCompletionsStreamResponse, OpenAiClientError>> {
         let line = line.trim();
 
         if line.is_empty() {
@@ -464,29 +462,32 @@ impl OpenAiCompatibleClient {
     fn parse_chat_completions_stream_response(
         chunk: &str,
     ) -> Result<ChatCompletionsStreamResponse, OpenAiClientError> {
-        let resp: ChatCompletionsStreamResponse = serde_json::from_str(chunk)
-            .map_err(OpenAiClientError::Decode)?;
+        let resp: ChatCompletionsStreamResponse =
+            serde_json::from_str(chunk).map_err(OpenAiClientError::Decode)?;
         Ok(resp)
     }
 }
 
 fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
     match message {
-        Message::System{ content } => ChatCompletionsMessageRequest::System {
+        Message::System { content } => ChatCompletionsMessageRequest::System {
             content: content.clone(),
         },
-        Message::User{ content } => ChatCompletionsMessageRequest::User {
+        Message::User { content } => ChatCompletionsMessageRequest::User {
             content: content.clone(),
         },
-        Message::Assistant{ content, tool_calls } => ChatCompletionsMessageRequest::Assistant {
+        Message::Assistant {
+            content,
+            tool_calls,
+        } => ChatCompletionsMessageRequest::Assistant {
             content: content.clone(),
-            tool_calls: tool_calls
-                .iter()
-                .map(to_provider_toolcall)
-                .collect(),
+            tool_calls: tool_calls.iter().map(to_provider_toolcall).collect(),
             reasoning_content: None,
         },
-        Message::Tool{ tool_call_id, content } => ChatCompletionsMessageRequest::Tool {
+        Message::Tool {
+            tool_call_id,
+            content,
+        } => ChatCompletionsMessageRequest::Tool {
             tool_call_id: tool_call_id.clone(),
             content: content.clone(),
         },
@@ -495,7 +496,7 @@ fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
 
 fn to_domain_toolcall(tool_call: &ChatCompletionToolCall) -> ToolCall {
     ToolCall {
-        id: tool_call.id.clone(), 
+        id: tool_call.id.clone(),
         name: tool_call.function.name.clone(),
         arguments: tool_call.function.arguments.clone(),
     }
@@ -503,30 +504,31 @@ fn to_domain_toolcall(tool_call: &ChatCompletionToolCall) -> ToolCall {
 
 fn to_provider_toolcall(tool_call: &ToolCall) -> ChatCompletionToolCall {
     ChatCompletionToolCall {
-        id: tool_call.id.to_string(), 
+        id: tool_call.id.to_string(),
         tool_type: String::from("function"),
         function: ChatCompletionToolCallFunction {
             name: tool_call.name.to_string(),
             arguments: tool_call.arguments.to_string(),
-        } 
+        },
     }
 }
 
-fn to_provider_tools(tool: Tool) -> ChatCompletionTool{
+fn to_provider_tools(tool: Tool) -> ChatCompletionTool {
     ChatCompletionTool {
         tool_type: String::from("function"),
         function: ChatCompletionFunction {
             name: tool.name,
             description: tool.description,
             parameters: tool.parameters.map(to_provider_parameters),
-        }
+        },
     }
 }
 
 fn to_provider_parameters(parameter: ToolParameters) -> ChatCompletionToolParameters {
     ChatCompletionToolParameters {
         parameter_type: String::from("object"),
-        properties: parameter.properties
+        properties: parameter
+            .properties
             .into_iter()
             .map(to_provider_parameter_property)
             .collect(),
@@ -534,15 +536,16 @@ fn to_provider_parameters(parameter: ToolParameters) -> ChatCompletionToolParame
     }
 }
 
-fn to_provider_parameter_property(property: ToolParameterProperty) -> 
-    (String, ChatCompletionToolParameterProperty) {
+fn to_provider_parameter_property(
+    property: ToolParameterProperty,
+) -> (String, ChatCompletionToolParameterProperty) {
     (
-        property.name, 
-        ChatCompletionToolParameterProperty { 
-            property_type:to_provider_property_type(property.property_type),
-            description: property.description.to_string(), 
-            property_enum: property.property_enum, 
-        }
+        property.name,
+        ChatCompletionToolParameterProperty {
+            property_type: to_provider_property_type(property.property_type),
+            description: property.description.to_string(),
+            property_enum: property.property_enum,
+        },
     )
 }
 
@@ -566,9 +569,7 @@ fn to_llm_error(error: OpenAiClientError) -> LlmError {
 
         OpenAiClientError::Status { code: 401, .. } => LlmError::AuthenticationFailed,
         OpenAiClientError::Status { code: 403, .. } => LlmError::PermissionDenied,
-        OpenAiClientError::Status { code: 429, .. } => LlmError::RateLimited {
-            retry_after: None,
-        },
+        OpenAiClientError::Status { code: 429, .. } => LlmError::RateLimited { retry_after: None },
         OpenAiClientError::Status {
             code: 400 | 422,
             body,
@@ -599,9 +600,9 @@ impl LlmProvider for OpenAiCompatibleClient {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
             stream: false,
-            tools: request.tools.map(|tools| {
-                tools.into_iter().map(to_provider_tools).collect()
-            }),
+            tools: request
+                .tools
+                .map(|tools| tools.into_iter().map(to_provider_tools).collect()),
         };
 
         let response = self
@@ -620,7 +621,12 @@ impl LlmProvider for OpenAiCompatibleClient {
             model: response.model,
             text: choice.message.content().map(str::to_string),
             reasoning: choice.message.reasoning_content().map(str::to_string),
-            tool_calls: choice.message.tool_calls().iter().map(to_domain_toolcall).collect(),
+            tool_calls: choice
+                .message
+                .tool_calls()
+                .iter()
+                .map(to_domain_toolcall)
+                .collect(),
         })
     }
 
@@ -632,9 +638,9 @@ impl LlmProvider for OpenAiCompatibleClient {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
             stream: true,
-            tools: request.tools.map(|tools| {
-                tools.into_iter().map(to_provider_tools).collect()
-            }),
+            tools: request
+                .tools
+                .map(|tools| tools.into_iter().map(to_provider_tools).collect()),
         };
 
         let response = self
@@ -650,7 +656,7 @@ impl LlmProvider for OpenAiCompatibleClient {
                 .map_err(OpenAiClientError::Transport)
                 .map_err(to_llm_error)?;
 
-            return Err(to_llm_error(OpenAiClientError::Status{ code, body }));
+            return Err(to_llm_error(OpenAiClientError::Status { code, body }));
         }
 
         let stream = Self::stream_chat_response(response).map(|item| {
@@ -713,12 +719,14 @@ mod tests {
         let body = TOOL_CALLS_FIXTURE;
 
         // Act
-        let resp =
-            OpenAiCompatibleClient::parse_chat_completions_response(body).unwrap();
+        let resp = OpenAiCompatibleClient::parse_chat_completions_response(body).unwrap();
         let choice = &resp.choices[0];
 
         // Assert
-        assert!(matches!(choice.finish_reason, ChoicesFinishReason::ToolCalls));
+        assert!(matches!(
+            choice.finish_reason,
+            ChoicesFinishReason::ToolCalls
+        ));
 
         let tool_calls = choice.message.tool_calls();
 
@@ -825,7 +833,7 @@ mod tests {
         // Act
         let json = serde_json::to_value(to_provider_tools(tool)).unwrap();
 
-        // Assert 
+        // Assert
         let expected = serde_json::json!({
             "type": "function",
             "function": {

@@ -89,15 +89,18 @@ pub struct ToolCall {
 }
 
 pub enum Message {
-    System {content: String},
-    User {content: String},
-    Assistant { 
-        content: Option<String>, 
+    System {
+        content: String,
+    },
+    User {
+        content: String,
+    },
+    Assistant {
+        content: Option<String>,
         tool_calls: Vec<ToolCall>,
     },
     Tool {
         tool_call_id: String,
         content: String,
-    }
-     
+    },
 }

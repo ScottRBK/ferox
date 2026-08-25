@@ -1,5 +1,5 @@
-use std::fmt;
 use std::error::Error;
+use std::fmt;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -21,7 +21,9 @@ impl fmt::Display for LlmError {
             LlmError::InvalidRequest { message } => write!(f, "invalid request: {message}"),
             LlmError::AuthenticationFailed => write!(f, "authentication failed"),
             LlmError::PermissionDenied => write!(f, "permission denied"),
-            LlmError::RateLimited{ retry_after } => write!(f, "rate limited (retry after: {retry_after:?})"),
+            LlmError::RateLimited { retry_after } => {
+                write!(f, "rate limited (retry after: {retry_after:?})")
+            }
             LlmError::Timeout => write!(f, "timeout"),
             LlmError::ProviderUnavailable => write!(f, "provider unavailable"),
             LlmError::ProviderFailure { message } => write!(f, "provider failure: {message}"),
@@ -41,7 +43,6 @@ pub enum GatewayError {
     Llm(LlmError),
 }
 
-
 impl fmt::Display for GatewayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -51,15 +52,19 @@ impl fmt::Display for GatewayError {
             GatewayError::Llm(e) => write!(f, "{e}"),
         }
     }
-} 
+}
 
 impl Error for GatewayError {
-     fn source(&self) -> Option<&(dyn Error + 'static)> {
-         match self {
-             GatewayError::Llm(e) => Some(e),
-             _ => None,
-         }
-     }
- }
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            GatewayError::Llm(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
-impl From<LlmError> for GatewayError {fn from(e: LlmError) -> Self {GatewayError::Llm(e)}}
+impl From<LlmError> for GatewayError {
+    fn from(e: LlmError) -> Self {
+        GatewayError::Llm(e)
+    }
+}
