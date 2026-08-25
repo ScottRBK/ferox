@@ -81,6 +81,7 @@ pub struct CompletionChunk {
     pub finished: bool,
 }
 
+#[derive(Clone, Debug)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,

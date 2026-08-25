@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::io::{self, Write, IsTerminal};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_util::pin_mut;
 use futures_util::StreamExt;
@@ -13,7 +12,6 @@ use ferox::models::{
     CompletionRequest, 
     Message,
     Tool,
-    ToolCall,
     ToolParameterProperty,
     ToolParameterPropertyType,
 };
@@ -51,7 +49,7 @@ where
 
 fn build_tools() -> Vec<Tool> {
  vec![
-     Tool::new("get_current_datetime", "gets the current date and time in seconds since unix epoch"),
+     Tool::new("get_current_datetime", "gets the current date and time"),
      Tool::new("add_two_numbers", "adds two numbers together")
          .required_parameter(
              ToolParameterProperty {
@@ -104,98 +102,55 @@ where
             }
         }
 
-
-        let completion = gateway.complete(CompletionRequest{
+        let stream = gateway.stream(CompletionRequest{
             model: model.id.clone(),
             messages: &messages,
             tools: Some(build_tools()),
         }).await?;
 
+        pin_mut!(stream);
+
         let mut seen_reasoning = false;
         let mut seen_agent_response = false;
         let mut agent_response = String::new();
 
-        loop {
+        while let Some(completion) = stream.next().await {
+            match completion {
+                Ok(completion) => {
 
-            let tool_calls = completion.tool_calls.clone(); 
-            if tool_calls.is_empty() {
-                break;
+                    if let Some(response) = &completion.reasoning {
+                        if !seen_reasoning {
+                            println!["REASONING"];
+                            println!();
+                            seen_reasoning = true;
+                        }
+
+                        print!("{dim}{}", response);
+                        std::io::Write::flush(&mut  std::io::stdout())?; 
+                    }
+
+                    if let Some(response) = &completion.text {
+                        if !seen_agent_response && seen_reasoning {
+                            println!();
+                            println!["{reset}AGENT RESPONSE:"];
+                            println!();
+                            seen_agent_response = true;
+                        }
+                        print!("{}", response);
+                        std::io::Write::flush(&mut  std::io::stdout())?; 
+                        agent_response.push_str(response);
+                    }
+                }
+                Err(e) => println!("Error fetching response from provier {}", e)
             }
-
-            messages.extend(handle_tool_calls(&tool_calls));
-
-            let completion = gateway.complete(CompletionRequest{
-                model: model.id.clone(),
-                messages: &messages,
-                tools: Some(build_tools()),
-            }).await?;
-
-       }
-
-        if let Some(response) = &completion.reasoning {
-            if !seen_reasoning {
-                println!["REASONING"];
-                println!();
-                seen_reasoning = true;
-            }
-
-            print!("{dim}{}", response);
-            std::io::Write::flush(&mut  std::io::stdout())?; 
         }
-
-        if let Some(response) = &completion.text {
-            if !seen_agent_response && seen_reasoning {
-                println!();
-                println!["{reset}AGENT RESPONSE:"];
-                println!();
-                seen_agent_response = true;
-            }
-            print!("{}", response);
-            std::io::Write::flush(&mut  std::io::stdout())?; 
-            agent_response.push_str(response);
-        }
-
-
         messages.push(Message::Assistant { 
             content: Some(agent_response),
-            tool_calls: completion.tool_calls.clone(),
+            tool_calls: Vec::new(),
         });
         println!();
     }
     Ok(())
-}
-
-fn handle_tool_calls(tool_calls: &Vec<ToolCall>) -> Vec<Message> {
-    let mut tool_messages: Vec<Message> = Vec::new();
-                    
-    for tool in tool_calls{
-        println!("executing tool {}", tool.name);
-        let result = execute_tool_call(tool);
-        tool_messages.push(result)
-    }
-
-    tool_messages 
-}
-
-fn execute_tool_call(tool_call: &ToolCall) -> Message {
-
-    let content = match tool_call.name.as_str() {
-        "get_current_datetime" => get_current_datetime().to_string(),
-        other => format!("unsupported/not-implemented {other}"),
-    };
-
-    Message::Tool {
-        tool_call_id: tool_call.id.clone(),
-        content,
-    }
-}
-
-fn get_current_datetime() -> u64 {
-
-     SystemTime::now()
-         .duration_since(UNIX_EPOCH)
-         .unwrap()
-         .as_secs()
 }
 
 fn print_models(models: &[Model]) {
