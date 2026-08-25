@@ -8,6 +8,8 @@ upstream consumers.
 ## Development Roadmap 
 
 - [ ] OpenAI Compatible Chat Completions endpoint 
+    - [ ] handle reasoning injection into context array
+    - [ ] handle reasoning effort being passed to inference provider 
 - [ ] Basic Logging 
 - [ ] Provider Configuration
 - [ ] Open Telemtry and Advanced Logging
