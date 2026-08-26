@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::collections::HashMap;
+use std::collections:: { HashMap, BTreeMap };
 use std::error::Error;
 use std::fmt;
 use std::pin::Pin;
@@ -241,11 +241,72 @@ pub struct ChatCompletionsResponse {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct ChatCompletionsToolCallDelta {
+    pub index: usize,
+    pub id: Option<String>,
+    #[serde(rename="type")]
+    pub tool_type: Option<String>, 
+    pub function: ChatCompletionsToolCallFunctionDelta,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatCompletionsToolCallFunctionDelta {
+    pub name: Option<String>,
+    pub arguments: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct ChatCompletionsStreamDelta {
     pub role: Option<String>,
     pub content: Option<String>,
     #[serde(alias = "reasoning")]
     pub reasoning_content: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ChatCompletionsToolCallDelta>,
+}
+
+#[derive(Default)]
+struct PendingToolCall {
+    id: Option<String>,
+    name: Option<String>,
+    arguments: String, 
+}
+
+impl PendingToolCall {
+
+    fn apply(&mut self, delta: &ChatCompletionsToolCallDelta) {
+
+        if let Some(id) = &delta.id {
+            self.id = Some(id.clone());
+        }
+
+        if let Some(name) = &delta.function.name {
+            self.name = Some(name.clone());
+        }
+
+        if let Some(arguments) = &delta.function.arguments {
+            self.arguments.push_str(arguments);
+        }
+    }
+
+    fn finish(self) -> Result<ToolCall, LlmError> {
+
+        let id = self.id.ok_or_else(||  LlmError::InvalidResponse {
+            message: "streamed tool call was missing an id".into(),
+        })?;
+
+        let name = self.name.ok_or_else(|| LlmError::InvalidResponse {
+            message: "streamed tool call was missing a function name".into(),
+        })?;
+    
+        Ok(
+            ToolCall{
+                id,
+                name,
+                arguments: self.arguments,
+            }
+        )
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -270,6 +331,12 @@ pub struct OpenAiCompatibleClientBuilder {
     timeout: Duration,
 }
 
+
+impl Default for OpenAiCompatibleClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl OpenAiCompatibleClientBuilder {
     pub fn new() -> Self {
         Self {
@@ -634,6 +701,7 @@ impl LlmProvider for OpenAiCompatibleClient {
         &self,
         request: CompletionRequest<'_>,
     ) -> Result<Self::CompletionStream, LlmError> {
+
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -659,15 +727,42 @@ impl LlmProvider for OpenAiCompatibleClient {
             return Err(to_llm_error(OpenAiClientError::Status { code, body }));
         }
 
-        let stream = Self::stream_chat_response(response).map(|item| {
+        let mut pending_tool_calls = BTreeMap::<usize, PendingToolCall>::new();
+
+        let stream = Self::stream_chat_response(response).map(move |item| {
+
             let chunk = item.map_err(to_llm_error)?;
             let choice = chunk.choices.first();
+
+            if let Some(choice) = choice {
+                for delta in &choice.delta.tool_calls {
+                    pending_tool_calls
+                        .entry(delta.index) 
+                        .or_default()
+                        .apply(delta); 
+                }
+            }
+
+            let finished = choice
+                .and_then(|choice| choice.finish_reason.as_ref())
+                .is_some();
+
+            let mut tool_calls = Vec::new();
+            
+            if finished {
+                let completed_calls = std::mem::take(&mut pending_tool_calls);
+
+                for (_, pending_call) in completed_calls {
+                    let tool_call = pending_call.finish()?;
+                    tool_calls.push(tool_call);
+                }
+            }
+
             Ok(CompletionChunk {
                 text: choice.and_then(|choice| choice.delta.content.clone()),
                 reasoning: choice.and_then(|choice| choice.delta.reasoning_content.clone()),
-                finished: choice
-                    .and_then(|choice| choice.finish_reason.as_ref())
-                    .is_some(),
+                tool_calls,
+                finished, 
             })
         });
 

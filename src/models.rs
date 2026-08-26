@@ -78,6 +78,7 @@ pub struct CompletionResponse {
 pub struct CompletionChunk {
     pub text: Option<String>,
     pub reasoning: Option<String>,
+    pub tool_calls: Vec<ToolCall>, 
     pub finished: bool,
 }
 

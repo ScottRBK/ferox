@@ -1,13 +1,17 @@
 use std::error::Error;
 use std::io::{self, IsTerminal, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_util::StreamExt;
 use futures_util::pin_mut;
 
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+
 use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::gateway::Gateway;
 use ferox::models::{
-    CompletionRequest, Message, Model, Tool, ToolParameterProperty, ToolParameterPropertyType,
+    CompletionRequest, Message, Model, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType,
 };
 use ferox::ports::llm::LlmProvider;
 
@@ -133,6 +137,9 @@ where
                         std::io::Write::flush(&mut std::io::stdout())?;
                         agent_response.push_str(response);
                     }
+
+                    let tool_calls = &completion.tool_calls; 
+
                 }
                 Err(e) => println!("Error fetching response from provier {}", e),
             }
@@ -145,6 +152,63 @@ where
     }
     Ok(())
 }
+
+fn handle_tool_calls(
+    tool_calls: &Vec<ToolCall>,
+) -> Result<Vec<Message>, Box<dyn Error + Send + Sync>> {
+    let mut tool_messages: Vec<Message> = Vec::new();
+
+    for tool in tool_calls {
+        println!("executing tool {}", tool.name);
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let result = execute_tool_call(tool)?;
+        tool_messages.push(result)
+    }
+
+    Ok(tool_messages)
+}
+
+fn execute_tool_call(tool_call: &ToolCall) -> Result<Message, Box<dyn Error + Send + Sync>> {
+    let content = match tool_call.name.as_str() {
+        "get_current_datetime" => get_current_datetime().to_string(),
+        "add_two_numbers" => {
+            let arguments: AddTwoNumbersArguments = parse_tool_arguments(&tool_call.arguments)?;
+            add_two_numbers(arguments.first_number, arguments.second_number).to_string()
+        }
+        other => format!("unsupported/not-implemented {other}"),
+    };
+
+    Ok(Message::Tool {
+        tool_call_id: tool_call.id.clone(),
+        content,
+    })
+}
+
+fn parse_tool_arguments<T>(arguments: &str) -> Result<T, serde_json::Error>
+where
+    T: DeserializeOwned,
+{
+    serde_json::from_str(arguments)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AddTwoNumbersArguments {
+    first_number: i32,
+    second_number: i32,
+}
+
+fn add_two_numbers(first_number: i32, second_number: i32) -> i32 {
+    first_number + second_number
+}
+
+fn get_current_datetime() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
 
 fn print_models(models: &[Model]) {
     for (i, model) in models.iter().enumerate() {
