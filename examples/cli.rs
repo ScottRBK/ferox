@@ -119,7 +119,7 @@ where
                 }
 
                 print!("{dim}{}", response);
-                std::io::Write::flush(&mut std::io::stdout())?;
+                io::stdout().flush()?;
             }
 
             if let Some(response) = &completion.text
@@ -130,7 +130,7 @@ where
                 println!["{reset}AGENT RESPONSE:"];
                 println!();
                 print!("{}", response);
-                std::io::Write::flush(&mut std::io::stdout())?;
+                io::stdout().flush()?;
                 agent_response.push_str(response);
             }
 
@@ -152,15 +152,23 @@ where
 }
 
 fn handle_tool_calls(
-    tool_calls: &Vec<ToolCall>,
+    tool_calls: &[ToolCall],
 ) -> Result<Vec<Message>, Box<dyn Error + Send + Sync>> {
     let mut tool_messages: Vec<Message> = Vec::new();
 
     for tool in tool_calls {
         println!("executing tool {}", tool.name);
-        std::io::Write::flush(&mut std::io::stdout())?;
-        let result = execute_tool_call(tool)?;
-        tool_messages.push(result)
+        io::stdout().flush()?;
+
+        let message = match execute_tool_call(tool) {
+            Ok(message) => message,
+            Err(error) => Message::Tool {
+                tool_call_id: tool.id.clone(),
+                content: format!("error executing tool: {error}"),
+            },
+        };
+
+        tool_messages.push(message);
     }
 
     Ok(tool_messages)
@@ -168,10 +176,10 @@ fn handle_tool_calls(
 
 fn execute_tool_call(tool_call: &ToolCall) -> Result<Message, Box<dyn Error + Send + Sync>> {
     let content = match tool_call.name.as_str() {
-        "get_current_datetime" => get_current_datetime().to_string(),
+        "get_current_datetime" => get_current_unix_epoch_datetime()?.to_string(),
         "add_two_numbers" => {
             let arguments: AddTwoNumbersArguments = parse_tool_arguments(&tool_call.arguments)?;
-            add_two_numbers(arguments.first_number, arguments.second_number).to_string()
+            add_two_numbers(arguments.first_number, arguments.second_number)?.to_string()
         }
         other => format!("unsupported/not-implemented {other}"),
     };
@@ -196,15 +204,18 @@ struct AddTwoNumbersArguments {
     second_number: i32,
 }
 
-fn add_two_numbers(first_number: i32, second_number: i32) -> i32 {
-    first_number + second_number
+fn add_two_numbers(
+    first_number: i32,
+    second_number: i32,
+) -> Result<i32, Box<dyn Error + Send + Sync>> {
+    first_number
+        .checked_add(second_number)
+        .ok_or_else(|| "addition result is outside of supported integer range".into())
 }
 
-fn get_current_datetime() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+fn get_current_unix_epoch_datetime() -> Result<u64, Box<dyn Error + Send + Sync>> {
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    Ok(duration.as_secs())
 }
 
 fn print_models(models: &[Model]) {
@@ -230,5 +241,65 @@ async fn select_models(models: &[Model]) -> Result<&Model, Box<dyn Error + Send 
             }
             _ => println!("Invalid selection, try again"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handle_add_tool_call(arguments: &str) -> Message {
+        let tool_call = ToolCall {
+            id: "call-1".into(),
+            name: "add_two_numbers".into(),
+            arguments: arguments.into(),
+        };
+
+        handle_tool_calls(&[tool_call])
+            .expect("tool errors should be returned as tool messages")
+            .into_iter()
+            .next()
+            .expect("expected one tool message")
+    }
+
+    fn assert_tool_message(message: Message, expected_content: &str) {
+        let Message::Tool {
+            tool_call_id,
+            content,
+        } = message
+        else {
+            panic!("expected a tool message");
+        };
+
+        assert_eq!(tool_call_id, "call-1");
+        assert!(
+            content.contains(expected_content),
+            "expected `{content}` to contain `{expected_content}`"
+        );
+    }
+
+    #[test]
+    fn valid_arguments_return_tool_result() {
+        let message = handle_add_tool_call(r#"{"first_number":2,"second_number":3}"#);
+
+        assert_tool_message(message, "5");
+    }
+
+    #[test]
+    fn invalid_argument_type_returns_tool_error() {
+        let message = handle_add_tool_call(r#"{"first_number":"two","second_number":3}"#);
+
+        assert_tool_message(message, "error executing tool:");
+        assert_tool_message(
+            handle_add_tool_call(r#"{"first_number":"two","second_number":3}"#),
+            "expected i32",
+        );
+    }
+
+    #[test]
+    fn addition_overflow_returns_tool_error_without_panicking() {
+        let message = handle_add_tool_call(r#"{"first_number":2147483647,"second_number":1}"#);
+
+        assert_tool_message(message, "outside of supported integer range");
     }
 }

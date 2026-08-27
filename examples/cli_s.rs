@@ -11,11 +11,12 @@ use serde::de::DeserializeOwned;
 use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::gateway::Gateway;
 use ferox::models::{
-    CompletionRequest, Message, Model, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType,
+    CompletionRequest, Message, Model, Tool, ToolCall, ToolParameterProperty,
+    ToolParameterPropertyType,
 };
 use ferox::ports::llm::LlmProvider;
 
-const BASE_URL: &str = "http://192.168.1.202:8080/v1";
+const BASE_URL: &str = "http://192.168.1.201:8080/v1";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -98,71 +99,102 @@ where
             }
         }
 
-        let stream = gateway
-            .stream(CompletionRequest {
-                model: model.id.clone(),
-                messages: &messages,
-                tools: Some(build_tools()),
-            })
-            .await?;
+        loop {
+            let stream = gateway
+                .stream(CompletionRequest {
+                    model: model.id.clone(),
+                    messages: &messages,
+                    tools: Some(build_tools()),
+                })
+                .await?;
 
-        pin_mut!(stream);
+            pin_mut!(stream);
 
-        let mut seen_reasoning = false;
-        let mut seen_agent_response = false;
-        let mut agent_response = String::new();
+            let mut seen_reasoning = false;
+            let mut seen_agent_response = false;
+            let mut agent_response = String::new();
+            let mut tool_calls = Vec::new();
 
-        while let Some(completion) = stream.next().await {
-            match completion {
-                Ok(completion) => {
-                    if let Some(response) = &completion.reasoning {
-                        if !seen_reasoning {
-                            println!["REASONING"];
-                            println!();
-                            seen_reasoning = true;
-                        }
+            while let Some(completion) = stream.next().await {
+                let completion = completion?;
 
-                        print!("{dim}{}", response);
-                        std::io::Write::flush(&mut std::io::stdout())?;
+                if let Some(response) = &completion.reasoning {
+                    if !seen_reasoning {
+                        println!("REASONING");
+                        println!();
+                        seen_reasoning = true;
                     }
 
-                    if let Some(response) = &completion.text {
-                        if !seen_agent_response && seen_reasoning {
-                            println!();
-                            println!["{reset}AGENT RESPONSE:"];
-                            println!();
-                            seen_agent_response = true;
-                        }
-                        print!("{}", response);
-                        std::io::Write::flush(&mut std::io::stdout())?;
-                        agent_response.push_str(response);
-                    }
-
-                    let tool_calls = &completion.tool_calls; 
-
+                    print!("{dim}{response}");
+                    io::stdout().flush()?;
                 }
-                Err(e) => println!("Error fetching response from provier {}", e),
+
+                if let Some(response) = &completion.text
+                    && !response.is_empty()
+                {
+                    if !seen_agent_response {
+                        if seen_reasoning {
+                            println!();
+                        }
+
+                        println!("{reset}AGENT RESPONSE:");
+                        println!();
+                        seen_agent_response = true;
+                    }
+
+                    print!("{response}");
+                    io::stdout().flush()?;
+                    agent_response.push_str(response);
+                }
+
+                tool_calls.extend(completion.tool_calls);
             }
+
+            if seen_reasoning && !seen_agent_response {
+                println!("{reset}");
+            }
+
+            let assistant_content = if agent_response.is_empty() {
+                None
+            } else {
+                Some(agent_response)
+            };
+
+            messages.push(Message::Assistant {
+                content: assistant_content,
+                tool_calls: tool_calls.clone(),
+            });
+
+            if tool_calls.is_empty() {
+                break;
+            }
+
+            messages.extend(handle_tool_calls(&tool_calls)?);
         }
-        messages.push(Message::Assistant {
-            content: Some(agent_response),
-            tool_calls: Vec::new(),
-        });
+
         println!();
     }
     Ok(())
 }
 
 fn handle_tool_calls(
-    tool_calls: &Vec<ToolCall>,
+    tool_calls: &[ToolCall],
 ) -> Result<Vec<Message>, Box<dyn Error + Send + Sync>> {
     let mut tool_messages: Vec<Message> = Vec::new();
 
     for tool in tool_calls {
         println!("executing tool {}", tool.name);
-        std::io::Write::flush(&mut std::io::stdout())?;
-        let result = execute_tool_call(tool)?;
-        tool_messages.push(result)
+        io::stdout().flush()?;
+
+        let message = match execute_tool_call(tool) {
+            Ok(message) => message,
+            Err(error) => Message::Tool {
+                tool_call_id: tool.id.clone(),
+                content: format!("error executing tool: {error}"),
+            },
+        };
+
+        tool_messages.push(message);
     }
 
     Ok(tool_messages)
@@ -170,10 +202,10 @@ fn handle_tool_calls(
 
 fn execute_tool_call(tool_call: &ToolCall) -> Result<Message, Box<dyn Error + Send + Sync>> {
     let content = match tool_call.name.as_str() {
-        "get_current_datetime" => get_current_datetime().to_string(),
+        "get_current_datetime" => get_current_unix_epoch_datetime()?.to_string(),
         "add_two_numbers" => {
             let arguments: AddTwoNumbersArguments = parse_tool_arguments(&tool_call.arguments)?;
-            add_two_numbers(arguments.first_number, arguments.second_number).to_string()
+            add_two_numbers(arguments.first_number, arguments.second_number)?.to_string()
         }
         other => format!("unsupported/not-implemented {other}"),
     };
@@ -198,17 +230,19 @@ struct AddTwoNumbersArguments {
     second_number: i32,
 }
 
-fn add_two_numbers(first_number: i32, second_number: i32) -> i32 {
-    first_number + second_number
+fn add_two_numbers(
+    first_number: i32,
+    second_number: i32,
+) -> Result<i32, Box<dyn Error + Send + Sync>> {
+    first_number
+        .checked_add(second_number)
+        .ok_or_else(|| "addition result is outside of supported integer range".into())
 }
 
-fn get_current_datetime() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+fn get_current_unix_epoch_datetime() -> Result<u64, Box<dyn Error + Send + Sync>> {
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    Ok(duration.as_secs())
 }
-
 
 fn print_models(models: &[Model]) {
     for (i, model) in models.iter().enumerate() {
@@ -233,5 +267,65 @@ async fn select_models(models: &[Model]) -> Result<&Model, Box<dyn Error + Send 
             }
             _ => println!("Invalid selection, try again"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handle_add_tool_call(arguments: &str) -> Message {
+        let tool_call = ToolCall {
+            id: "call-1".into(),
+            name: "add_two_numbers".into(),
+            arguments: arguments.into(),
+        };
+
+        handle_tool_calls(&[tool_call])
+            .expect("tool errors should be returned as tool messages")
+            .into_iter()
+            .next()
+            .expect("expected one tool message")
+    }
+
+    fn assert_tool_message(message: Message, expected_content: &str) {
+        let Message::Tool {
+            tool_call_id,
+            content,
+        } = message
+        else {
+            panic!("expected a tool message");
+        };
+
+        assert_eq!(tool_call_id, "call-1");
+        assert!(
+            content.contains(expected_content),
+            "expected `{content}` to contain `{expected_content}`"
+        );
+    }
+
+    #[test]
+    fn valid_arguments_return_tool_result() {
+        let message = handle_add_tool_call(r#"{"first_number":2,"second_number":3}"#);
+
+        assert_tool_message(message, "5");
+    }
+
+    #[test]
+    fn invalid_argument_type_returns_tool_error() {
+        let message = handle_add_tool_call(r#"{"first_number":"two","second_number":3}"#);
+
+        assert_tool_message(message, "error executing tool:");
+        assert_tool_message(
+            handle_add_tool_call(r#"{"first_number":"two","second_number":3}"#),
+            "expected i32",
+        );
+    }
+
+    #[test]
+    fn addition_overflow_returns_tool_error_without_panicking() {
+        let message = handle_add_tool_call(r#"{"first_number":2147483647,"second_number":1}"#);
+
+        assert_tool_message(message, "outside of supported integer range");
     }
 }
