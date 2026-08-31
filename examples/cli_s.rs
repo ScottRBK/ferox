@@ -11,8 +11,7 @@ use serde::de::DeserializeOwned;
 use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::gateway::Gateway;
 use ferox::models::{
-    CompletionRequest, Message, Model, Tool, ToolCall, ToolParameterProperty,
-    ToolParameterPropertyType,
+    CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType
 };
 use ferox::ports::llm::LlmProvider;
 
@@ -39,9 +38,11 @@ where
 
     let selected_model = select_models(&models).await?;
 
+    let reasoning_effort = select_reasoning_effort().await?; 
+
     println!["selected model: {}", selected_model.id];
 
-    chat_session(selected_model, gateway).await?;
+    chat_session(selected_model, reasoning_effort, gateway).await?;
 
     Ok(())
 }
@@ -78,6 +79,7 @@ async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
 
 async fn chat_session<P>(
     model: &Model,
+    reasoning_effort: ReasoningEffort,
     gateway: Gateway<P>,
 ) -> Result<(), Box<dyn Error + Send + Sync>>
 where
@@ -106,7 +108,7 @@ where
                     model: model.id.clone(),
                     messages: &messages,
                     tools: Some(build_tools()),
-                    reasoning_effort: None,
+                    reasoning_effort: Some(reasoning_effort),
                 })
                 .await?;
 
@@ -270,6 +272,30 @@ async fn select_models(models: &[Model]) -> Result<&Model, Box<dyn Error + Send 
             _ => println!("Invalid selection, try again"),
         }
     }
+}
+
+async fn select_reasoning_effort() -> Result<ReasoningEffort, Box<dyn Error + Send + Sync>> {
+    
+    println!("please select a reasoning effort for the model");
+    let reasoning_effort = &ReasoningEffort::ALL; 
+    for (i, effort) in reasoning_effort.iter().enumerate() {
+       println!("{}. {:?}", i+1, effort);
+    }
+
+    loop {
+        let mut user_input = String::new();
+        io::stdout().flush()?;
+        io::stdin()
+            .read_line(&mut user_input)
+            .expect("error reading input");
+        match user_input.trim().parse::<usize>() {
+            Ok(n) if (1..=reasoning_effort.len()).contains(&n) => {
+                return Ok(reasoning_effort[n - 1]);
+            }
+            _ => println!("Invalid selection, try again"),
+        }
+    }
+
 }
 
 #[cfg(test)]

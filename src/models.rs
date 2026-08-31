@@ -72,6 +72,7 @@ impl Tool {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum ReasoningEffort {
     None,
     Minimal,
@@ -81,6 +82,19 @@ pub enum ReasoningEffort {
     XHigh,
     Max,
 }
+
+impl ReasoningEffort {
+    pub const ALL: [ReasoningEffort; 7] = [
+        ReasoningEffort::None,
+        ReasoningEffort::Minimal,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::XHigh,
+        ReasoningEffort::Max,
+    ];
+}
+
 
 pub struct CompletionRequest<'a> {
     pub model: String,
