@@ -105,6 +105,7 @@ where
                     model: model.id.clone(),
                     messages: &messages,
                     tools: Some(build_tools()),
+                    reasoning_effort: None,
                 })
                 .await?;
 

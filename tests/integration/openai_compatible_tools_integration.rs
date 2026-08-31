@@ -134,6 +134,7 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
             model: "qwen3.6-35b".into(),
             messages: &messages,
             tools: Some(tools),
+            reasoning_effort: None,
         })
         .await
         .unwrap();
@@ -217,6 +218,7 @@ async fn streamed_tool_call_deltas_are_reassembled_through_gateway() {
             model: "qwen3.6-35b".into(),
             messages: &messages,
             tools: Some(tools),
+            reasoning_effort: None,
         })
         .await
         .unwrap();

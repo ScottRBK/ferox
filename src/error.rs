@@ -13,6 +13,7 @@ pub enum LlmError {
     ProviderFailure { message: String },
     Transport { message: String },
     InvalidResponse { message: String },
+    InvalidModelModality{ modality: String },
 }
 
 impl fmt::Display for LlmError {
@@ -29,6 +30,7 @@ impl fmt::Display for LlmError {
             LlmError::ProviderFailure { message } => write!(f, "provider failure: {message}"),
             LlmError::Transport { message } => write!(f, "transport error: {message}"),
             LlmError::InvalidResponse { message } => write!(f, "invalid response: {message}"),
+            LlmError::InvalidModelModality{ modality }=> write!(f, "invalid model modality {modality}")
         }
     }
 }

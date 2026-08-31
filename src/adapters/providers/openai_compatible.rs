@@ -1,8 +1,7 @@
 use crate::{
     error::LlmError,
     models::{
-        CompletionChunk, CompletionRequest, CompletionResponse, Message, Model, Tool, ToolCall,
-        ToolParameterProperty, ToolParameterPropertyType, ToolParameters,
+        CompletionChunk, CompletionRequest, CompletionResponse, Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType, ToolParameters
     },
     ports::llm::LlmProvider,
 };
@@ -12,7 +11,7 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::collections:: { HashMap, BTreeMap };
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt;
 use std::pin::Pin;
@@ -53,6 +52,10 @@ impl Error for ClientBuildError {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ProviderModel {
     pub id: String,
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
+    #[serde(default)]
+    pub output_modalities: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -214,6 +217,8 @@ pub struct ChatCompletionsRequest {
     pub messages: Vec<ChatCompletionsMessageRequest>,
     pub stream: bool,
     pub tools: Option<Vec<ChatCompletionTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -244,8 +249,8 @@ pub struct ChatCompletionsResponse {
 pub struct ChatCompletionsToolCallDelta {
     pub index: usize,
     pub id: Option<String>,
-    #[serde(rename="type")]
-    pub tool_type: Option<String>, 
+    #[serde(rename = "type")]
+    pub tool_type: Option<String>,
     pub function: ChatCompletionsToolCallFunctionDelta,
 }
 
@@ -269,13 +274,11 @@ pub struct ChatCompletionsStreamDelta {
 struct PendingToolCall {
     id: Option<String>,
     name: Option<String>,
-    arguments: String, 
+    arguments: String,
 }
 
 impl PendingToolCall {
-
     fn apply(&mut self, delta: &ChatCompletionsToolCallDelta) {
-
         if let Some(id) = &delta.id {
             self.id = Some(id.clone());
         }
@@ -290,22 +293,19 @@ impl PendingToolCall {
     }
 
     fn finish(self) -> Result<ToolCall, LlmError> {
-
-        let id = self.id.ok_or_else(||  LlmError::InvalidResponse {
+        let id = self.id.ok_or_else(|| LlmError::InvalidResponse {
             message: "streamed tool call was missing an id".into(),
         })?;
 
         let name = self.name.ok_or_else(|| LlmError::InvalidResponse {
             message: "streamed tool call was missing a function name".into(),
         })?;
-    
-        Ok(
-            ToolCall{
-                id,
-                name,
-                arguments: self.arguments,
-            }
-        )
+
+        Ok(ToolCall {
+            id,
+            name,
+            arguments: self.arguments,
+        })
     }
 }
 
@@ -330,7 +330,6 @@ pub struct OpenAiCompatibleClientBuilder {
     api_key: Option<String>,
     timeout: Duration,
 }
-
 
 impl Default for OpenAiCompatibleClientBuilder {
     fn default() -> Self {
@@ -561,6 +560,44 @@ fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
     }
 }
 
+fn to_provider_reasoning_effort(reasoning_effort: ReasoningEffort) -> String {
+    match reasoning_effort {
+        ReasoningEffort::None => "none",
+        ReasoningEffort::Minimal => "minimal",
+        ReasoningEffort::Low => "low",
+        ReasoningEffort::Medium => "medium",
+        ReasoningEffort::High => "high",
+        ReasoningEffort::XHigh => "xhigh",
+        ReasoningEffort::Max => "max",
+    }
+    .into()
+}
+
+fn to_domain_model_modality(modality: &str) -> Result<ModelModality, LlmError> {
+    match modality {
+        "text" => Ok(ModelModality::Text),
+        "image" => Ok(ModelModality::Image),
+        "video" => Ok(ModelModality::Video),
+        "audio" => Ok(ModelModality::Audio),
+        _ => Err(LlmError::InvalidModelModality { modality: (modality.into()) }), 
+    }
+}
+
+fn to_domain_model_modalities(modalities: Vec<String>) -> Result<Vec<ModelModality>, LlmError> {
+   modalities
+       .into_iter()
+       .map(|modality| to_domain_model_modality(&modality))
+       .collect()
+}
+
+fn to_domain_model(provider_model: ProviderModel) -> Result<Model, LlmError> {
+    Ok( Model {
+        id: provider_model.id,
+        input_modalities: to_domain_model_modalities(provider_model.input_modalities)?,
+        output_modalities: to_domain_model_modalities(provider_model.output_modalities)?,
+    })
+}
+
 fn to_domain_toolcall(tool_call: &ChatCompletionToolCall) -> ToolCall {
     ToolCall {
         id: tool_call.id.clone(),
@@ -670,6 +707,7 @@ impl LlmProvider for OpenAiCompatibleClient {
             tools: request
                 .tools
                 .map(|tools| tools.into_iter().map(to_provider_tools).collect()),
+            reasoning_effort: request.reasoning_effort.map(to_provider_reasoning_effort),
         };
 
         let response = self
@@ -701,7 +739,6 @@ impl LlmProvider for OpenAiCompatibleClient {
         &self,
         request: CompletionRequest<'_>,
     ) -> Result<Self::CompletionStream, LlmError> {
-
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -709,6 +746,7 @@ impl LlmProvider for OpenAiCompatibleClient {
             tools: request
                 .tools
                 .map(|tools| tools.into_iter().map(to_provider_tools).collect()),
+            reasoning_effort: request.reasoning_effort.map(to_provider_reasoning_effort),
         };
 
         let response = self
@@ -730,16 +768,15 @@ impl LlmProvider for OpenAiCompatibleClient {
         let mut pending_tool_calls = BTreeMap::<usize, PendingToolCall>::new();
 
         let stream = Self::stream_chat_response(response).map(move |item| {
-
             let chunk = item.map_err(to_llm_error)?;
             let choice = chunk.choices.first();
 
             if let Some(choice) = choice {
                 for delta in &choice.delta.tool_calls {
                     pending_tool_calls
-                        .entry(delta.index) 
+                        .entry(delta.index)
                         .or_default()
-                        .apply(delta); 
+                        .apply(delta);
                 }
             }
 
@@ -748,7 +785,7 @@ impl LlmProvider for OpenAiCompatibleClient {
                 .is_some();
 
             let mut tool_calls = Vec::new();
-            
+
             if finished {
                 let completed_calls = std::mem::take(&mut pending_tool_calls);
 
@@ -762,7 +799,7 @@ impl LlmProvider for OpenAiCompatibleClient {
                 text: choice.and_then(|choice| choice.delta.content.clone()),
                 reasoning: choice.and_then(|choice| choice.delta.reasoning_content.clone()),
                 tool_calls,
-                finished, 
+                finished,
             })
         });
 
@@ -771,23 +808,25 @@ impl LlmProvider for OpenAiCompatibleClient {
 
     async fn list_models(&self) -> Result<Vec<Model>, LlmError> {
         let provider_models = self.fetch_models().await.map_err(to_llm_error)?;
-        let models = provider_models
+        provider_models
             .into_iter()
-            .map(|provider_model| Model {
-                id: provider_model.id,
-            })
-            .collect();
-        Ok(models)
+            .map(to_domain_model)
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ModelModality;
     use futures_util::StreamExt;
     use futures_util::pin_mut;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     const MODELS_FIXTURE: &str = include_str!("../fixtures/models_response.json");
+    const MODELS_WITH_MODALITIES_FIXTURE: &str =
+        include_str!("../fixtures/models_response_with_modalities.json");
     const RESPONSE_FIXUTRE: &str = include_str!("../fixtures/chat_completions_response.json");
     const RESPONSE_FIXUTRE_STREAM: &str =
         include_str!("../fixtures/chat_completions_response_stream.json");
@@ -798,6 +837,40 @@ mod tests {
     fn test_deserialise_models() {
         let models = OpenAiCompatibleClient::parse_models(MODELS_FIXTURE).unwrap();
         assert!(!models.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_models_returns_text_input_and_output_modalities() {
+        // Arrange
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/models"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(MODELS_WITH_MODALITIES_FIXTURE, "application/json"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = OpenAiCompatibleClient::builder()
+            .base_url(server.uri())
+            .build()
+            .unwrap();
+
+        // Act
+        let models = client.list_models().await.unwrap();
+
+        // Assert
+        let model = models.first().expect("expected at least one model");
+        assert!(matches!(
+            model.input_modalities.as_slice(),
+            [ModelModality::Text]
+        ));
+        assert!(matches!(
+            model.output_modalities.as_slice(),
+            [ModelModality::Text]
+        ));
     }
 
     #[test]

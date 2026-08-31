@@ -1,0 +1,11 @@
+{
+  "data": [
+    {
+      "id": "text-model",
+      "object": "model",
+      "owned_by": "test-provider",
+      "input_modalities": ["text"],
+      "output_modalities": ["text"]
+    }
+  ]
+}

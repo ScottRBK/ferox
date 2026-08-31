@@ -39,6 +39,7 @@ async fn model_returns_completion() {
             model: MODEL.into(),
             messages: &messages,
             tools: None,
+            reasoning_effort: None,
         })
         .await
         .unwrap();

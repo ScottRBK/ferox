@@ -36,6 +36,7 @@ where
     println!["Welcome to an example of the ferox libary (press q to quit)"];
 
     let models = gateway.list_models().await?;
+
     let selected_model = select_models(&models).await?;
 
     println!["selected model: {}", selected_model.id];
@@ -105,6 +106,7 @@ where
                     model: model.id.clone(),
                     messages: &messages,
                     tools: Some(build_tools()),
+                    reasoning_effort: None,
                 })
                 .await?;
 

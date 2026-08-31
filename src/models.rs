@@ -1,6 +1,16 @@
 #[derive(Debug)]
 pub struct Model {
     pub id: String,
+    pub input_modalities: Vec<ModelModality>,
+    pub output_modalities: Vec<ModelModality>,
+}
+
+#[derive(Debug)]
+pub enum ModelModality {
+    Text,
+    Image,
+    Video,
+    Audio,
 }
 
 pub enum ToolParameterPropertyType {
@@ -62,10 +72,21 @@ impl Tool {
     }
 }
 
+pub enum ReasoningEffort {
+    None,
+    Minimal,
+    Low,
+    Medium,
+    High,
+    XHigh,
+    Max,
+}
+
 pub struct CompletionRequest<'a> {
     pub model: String,
     pub messages: &'a [Message],
     pub tools: Option<Vec<Tool>>,
+    pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 pub struct CompletionResponse {
@@ -78,7 +99,7 @@ pub struct CompletionResponse {
 pub struct CompletionChunk {
     pub text: Option<String>,
     pub reasoning: Option<String>,
-    pub tool_calls: Vec<ToolCall>, 
+    pub tool_calls: Vec<ToolCall>,
     pub finished: bool,
 }
 
