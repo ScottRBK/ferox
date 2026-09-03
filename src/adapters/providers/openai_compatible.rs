@@ -1,5 +1,5 @@
 use crate::{
-    error::LlmError,
+    error::{GatewayError, LlmError},
     models::{
         CompletionChunk, CompletionRequest, CompletionResponse, Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType, ToolParameters
     },
@@ -694,12 +694,12 @@ fn to_llm_error(error: OpenAiClientError) -> LlmError {
 }
 
 impl LlmProvider for OpenAiCompatibleClient {
-    type CompletionStream = Pin<Box<dyn Stream<Item = Result<CompletionChunk, LlmError>> + Send>>;
+    type CompletionStream = Pin<Box<dyn Stream<Item = Result<CompletionChunk, GatewayError>> + Send>>;
 
     async fn complete(
         &self,
         request: CompletionRequest<'_>,
-    ) -> Result<CompletionResponse, LlmError> {
+    ) -> Result<CompletionResponse, GatewayError> {
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -738,7 +738,7 @@ impl LlmProvider for OpenAiCompatibleClient {
     async fn stream(
         &self,
         request: CompletionRequest<'_>,
-    ) -> Result<Self::CompletionStream, LlmError> {
+    ) -> Result<Self::CompletionStream, GatewayError> {
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -762,7 +762,7 @@ impl LlmProvider for OpenAiCompatibleClient {
                 .map_err(OpenAiClientError::Transport)
                 .map_err(to_llm_error)?;
 
-            return Err(to_llm_error(OpenAiClientError::Status { code, body }));
+            return Err(GatewayError::Llm(to_llm_error(OpenAiClientError::Status { code, body })));
         }
 
         let mut pending_tool_calls = BTreeMap::<usize, PendingToolCall>::new();
@@ -806,11 +806,11 @@ impl LlmProvider for OpenAiCompatibleClient {
         Ok(Box::pin(stream))
     }
 
-    async fn list_models(&self) -> Result<Vec<Model>, LlmError> {
+    async fn list_models(&self) -> Result<Vec<Model>, GatewayError> {
         let provider_models = self.fetch_models().await.map_err(to_llm_error)?;
         provider_models
             .into_iter()
-            .map(to_domain_model)
+            .map(|m| to_domain_model(m).map_err(GatewayError::from))
             .collect()
     }
 }

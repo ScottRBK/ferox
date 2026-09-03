@@ -21,7 +21,6 @@ where
         self.provider
             .complete(request)
             .await
-            .map_err(GatewayError::Llm)
     }
 
     pub async fn stream(
@@ -31,10 +30,10 @@ where
         self.provider
             .stream(request)
             .await
-            .map_err(GatewayError::Llm)
     }
 
     pub async fn list_models(&self) -> Result<Vec<Model>, GatewayError> {
-        self.provider.list_models().await.map_err(GatewayError::Llm)
+        self.provider.list_models()
+            .await
     }
 }
