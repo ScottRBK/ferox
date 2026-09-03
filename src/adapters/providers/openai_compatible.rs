@@ -11,42 +11,60 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use thiserror::Error;
 use std::collections::{BTreeMap, HashMap};
-use std::error::Error;
-use std::fmt;
 use std::pin::Pin;
 use std::time::Duration;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum OpenAiClientError {
+    #[error("transport error: {0}")]
     Transport(reqwest::Error),
+    #[error("provider status {code}: {body}")]
     Status { code: u16, body: String },
+    #[error("invalid response {0}")]
     Decode(serde_json::Error),
+    #[error("invalid utf8: {0}")]
     Utf8(std::str::Utf8Error),
 }
 
-#[derive(Debug)]
+impl From<OpenAiClientError> for LlmError {
+    fn from(error: OpenAiClientError) -> Self {
+        match error {
+            OpenAiClientError::Transport(err) if err.is_timeout() => LlmError::Timeout,
+            OpenAiClientError::Transport(err) => LlmError::Transport {
+                message: err.to_string(),
+            },
+            OpenAiClientError::Status { code: 401, .. } => LlmError::AuthenticationFailed,
+            OpenAiClientError::Status { code: 403, .. } => LlmError::PermissionDenied,
+            OpenAiClientError::Status { code: 429, .. } => {
+                LlmError::RateLimited { retry_after: None }
+            }
+            OpenAiClientError::Status {
+                code: 400 | 422,
+                body,
+            } => LlmError::InvalidRequest { message: body },
+            OpenAiClientError::Status { code: 408, .. } => LlmError::Timeout,
+            OpenAiClientError::Status {
+                code: 500..=599, ..
+            } => LlmError::ProviderUnavailable,
+            OpenAiClientError::Status { body, .. } => LlmError::ProviderFailure { message: body },
+            OpenAiClientError::Decode(err) => LlmError::InvalidResponse {
+                message: err.to_string(),
+            },
+            OpenAiClientError::Utf8(err) => LlmError::InvalidResponse {
+                message: err.to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Error)]
 pub enum ClientBuildError {
+    #[error("missing base_url parameter")]
     MissingBaseUrl,
-    HttpClient(reqwest::Error),
-}
-
-impl fmt::Display for ClientBuildError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ClientBuildError::MissingBaseUrl => write!(f, "missing base_url parameter"),
-            ClientBuildError::HttpClient(e) => write!(f, "failed to build HTTP client {e}"),
-        }
-    }
-}
-
-impl Error for ClientBuildError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ClientBuildError::HttpClient(e) => Some(e),
-            _ => None,
-        }
-    }
+    #[error("failed to build HTTP client {0}")]
+    HttpClient(#[from]reqwest::Error),
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -664,34 +682,7 @@ fn to_provider_property_type(
     }
 }
 
-fn to_llm_error(error: OpenAiClientError) -> LlmError {
-    match error {
-        OpenAiClientError::Transport(err) if err.is_timeout() => LlmError::Timeout,
-        OpenAiClientError::Transport(err) => LlmError::Transport {
-            message: err.to_string(),
-        },
 
-        OpenAiClientError::Status { code: 401, .. } => LlmError::AuthenticationFailed,
-        OpenAiClientError::Status { code: 403, .. } => LlmError::PermissionDenied,
-        OpenAiClientError::Status { code: 429, .. } => LlmError::RateLimited { retry_after: None },
-        OpenAiClientError::Status {
-            code: 400 | 422,
-            body,
-        } => LlmError::InvalidRequest { message: body },
-        OpenAiClientError::Status { code: 408, .. } => LlmError::Timeout,
-        OpenAiClientError::Status {
-            code: 500..=599, ..
-        } => LlmError::ProviderUnavailable,
-        OpenAiClientError::Status { body, .. } => LlmError::ProviderFailure { message: body },
-
-        OpenAiClientError::Decode(err) => LlmError::InvalidResponse {
-            message: err.to_string(),
-        },
-        OpenAiClientError::Utf8(err) => LlmError::InvalidResponse {
-            message: err.to_string(),
-        },
-    }
-}
 
 impl LlmProvider for OpenAiCompatibleClient {
     type CompletionStream = Pin<Box<dyn Stream<Item = Result<CompletionChunk, GatewayError>> + Send>>;
@@ -713,7 +704,7 @@ impl LlmProvider for OpenAiCompatibleClient {
         let response = self
             .create_chat_completion(&provider_request)
             .await
-            .map_err(to_llm_error)?;
+            .map_err(LlmError::from)?;
 
         let choice = response
             .choices
@@ -752,7 +743,7 @@ impl LlmProvider for OpenAiCompatibleClient {
         let response = self
             .generate_chat_response(&provider_request)
             .await
-            .map_err(to_llm_error)?;
+            .map_err(LlmError::from)?;
 
         let code = response.status().as_u16();
         if !(200..300).contains(&code) {
@@ -760,15 +751,15 @@ impl LlmProvider for OpenAiCompatibleClient {
                 .text()
                 .await
                 .map_err(OpenAiClientError::Transport)
-                .map_err(to_llm_error)?;
+                .map_err(LlmError::from)?;
 
-            return Err(GatewayError::Llm(to_llm_error(OpenAiClientError::Status { code, body })));
+            return Err(GatewayError::Llm(OpenAiClientError::Status { code, body }.into()));
         }
 
         let mut pending_tool_calls = BTreeMap::<usize, PendingToolCall>::new();
 
         let stream = Self::stream_chat_response(response).map(move |item| {
-            let chunk = item.map_err(to_llm_error)?;
+            let chunk = item.map_err(LlmError::from)?;
             let choice = chunk.choices.first();
 
             if let Some(choice) = choice {
@@ -807,7 +798,7 @@ impl LlmProvider for OpenAiCompatibleClient {
     }
 
     async fn list_models(&self) -> Result<Vec<Model>, GatewayError> {
-        let provider_models = self.fetch_models().await.map_err(to_llm_error)?;
+        let provider_models = self.fetch_models().await.map_err(LlmError::from)?;
         provider_models
             .into_iter()
             .map(|m| to_domain_model(m).map_err(GatewayError::from))
