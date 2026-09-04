@@ -129,10 +129,11 @@ where
             }
 
             if let Some(response) = &completion.text
-                && seen_reasoning
                 && !response.is_empty()
             {
-                println!();
+                if seen_reasoning {
+                    println!();
+                }
                 println!["{reset}AGENT RESPONSE:"];
                 println!();
                 print!("{}", response);
