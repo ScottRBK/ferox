@@ -104,40 +104,36 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
             content: "What is the weather in Leeds, United Kingdom?".into(),
         },
     ];
+
     let tools = vec![
         Tool::new("get_weather", "Get the current weather for a location")
-            .required_parameter(ToolParameterProperty {
-                name: "location".into(),
-                property_type: ToolParameterPropertyType::String,
-                description: "City and country".into(),
-                property_enum: None,
-            })
-            .optional_parameter(ToolParameterProperty {
-                name: "unit".into(),
-                property_type: ToolParameterPropertyType::String,
-                description: "Temperature unit".into(),
-                property_enum: Some(vec!["celsius".into(), "fahrenheit".into()]),
+            .required_parameter(ToolParameterProperty::new(
+                    "location",
+                    ToolParameterPropertyType::String,
+                    "City and country"))
+            .optional_parameter({
+                let mut prop = ToolParameterProperty::new(
+                        "unit",
+                        ToolParameterPropertyType::String,
+                        "Temperature unit",
+                    );
+                prop.property_enum = Some(vec!["celsius".into(), "fahrenheit".into()]);
+                prop
             }),
-        Tool::new("get_current_time", "Get the current time for a timezone").required_parameter(
-            ToolParameterProperty {
-                name: "timezone".into(),
-                property_type: ToolParameterPropertyType::String,
-                description: "IANA timezone".into(),
-                property_enum: None,
-            },
-        ),
-    ];
+        Tool::new("get_current_time", "Get the current time for a timezone")
+            .required_parameter(ToolParameterProperty::new(
+                "timezone",
+                ToolParameterPropertyType::String,
+                "IANA timezone",)
+            )
+    ]; 
 
     // Act
+    let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
+    request.tools = Some(tools);
+
     let response = gateway
-        .complete(CompletionRequest {
-            model: "qwen3.6-35b".into(),
-            messages: &messages,
-            tools: Some(tools),
-            reasoning_effort: None,
-        })
-        .await
-        .unwrap();
+        .complete(request).await.unwrap();
 
     // Assert
     assert_eq!(response.text.as_deref(), Some("The tools were registered."));
@@ -198,30 +194,24 @@ async fn streamed_tool_call_deltas_are_reassembled_through_gateway() {
     }];
     let tools = vec![
         Tool::new("add_two_numbers", "Add two integers together")
-            .required_parameter(ToolParameterProperty {
-                name: "first_number".into(),
-                property_type: ToolParameterPropertyType::Integer,
-                description: "First integer".into(),
-                property_enum: None,
-            })
-            .required_parameter(ToolParameterProperty {
-                name: "second_number".into(),
-                property_type: ToolParameterPropertyType::Integer,
-                description: "Second integer".into(),
-                property_enum: None,
-            }),
+            .required_parameter(ToolParameterProperty::new(
+                    "first_number",
+                    ToolParameterPropertyType::Integer,
+                    "First integer",
+            ))
+            .required_parameter(ToolParameterProperty::new(
+                    "second_number",
+                    ToolParameterPropertyType::Integer,
+                    "Second integer",
+            )),
     ];
 
     // Act
+    let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
+    request.tools = Some(tools);
     let stream = gateway
-        .stream(CompletionRequest {
-            model: "qwen3.6-35b".into(),
-            messages: &messages,
-            tools: Some(tools),
-            reasoning_effort: None,
-        })
-        .await
-        .unwrap();
+        .stream(request).await.unwrap();
+
     pin_mut!(stream);
 
     let mut chunks = Vec::new();

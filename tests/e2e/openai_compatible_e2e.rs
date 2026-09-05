@@ -34,15 +34,9 @@ async fn model_returns_completion() {
     }];
 
     // Act
+    let request = CompletionRequest::new(MODEL.into(), &messages);
     let response = gateway
-        .complete(CompletionRequest {
-            model: MODEL.into(),
-            messages: &messages,
-            tools: None,
-            reasoning_effort: None,
-        })
-        .await
-        .unwrap();
+        .complete(request).await.unwrap();
 
     // Assert
     assert!(

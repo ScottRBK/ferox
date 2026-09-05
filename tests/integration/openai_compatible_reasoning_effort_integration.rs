@@ -37,14 +37,9 @@ async fn reasoning_effort_is_omitted_when_not_supplied() {
     }];
 
     // Act
+    let request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
     let response = gateway
-        .complete(CompletionRequest {
-            model: "qwen3.6-35b".into(),
-            messages: &messages,
-            tools: None,
-            reasoning_effort: None,
-        })
-        .await
+        .complete(request).await
         .unwrap();
 
     // Assert
@@ -80,15 +75,10 @@ async fn reasoning_effort_is_sent_when_supplied() {
     }];
 
     // Act
+    let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
+    request.reasoning_effort = Some(ReasoningEffort::Medium);
     let response = gateway
-        .complete(CompletionRequest {
-            model: "qwen3.6-35b".into(),
-            messages: &messages,
-            tools: None,
-            reasoning_effort: Some(ReasoningEffort::Medium),
-        })
-        .await
-        .unwrap();
+        .complete(request).await.unwrap();
 
     // Assert
     assert_eq!(response.text.as_deref(), Some("Hello"));
@@ -126,15 +116,10 @@ async fn reasoning_effort_is_sent_for_streaming_requests() {
     }];
 
     // Act
+    let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
+    request.reasoning_effort = Some(ReasoningEffort::High);
     let stream = gateway
-        .stream(CompletionRequest {
-            model: "qwen3.6-35b".into(),
-            messages: &messages,
-            tools: None,
-            reasoning_effort: Some(ReasoningEffort::High),
-        })
-        .await
-        .unwrap();
+        .stream(request).await.unwrap();
     pin_mut!(stream);
     stream
         .next()

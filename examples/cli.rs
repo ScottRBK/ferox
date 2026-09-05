@@ -53,18 +53,16 @@ fn build_tools() -> Vec<Tool> {
             "gets the current date and time in seconds since unix epoch",
         ),
         Tool::new("add_two_numbers", "adds two integers together")
-            .required_parameter(ToolParameterProperty {
-                name: String::from("first_number"),
-                property_type: ToolParameterPropertyType::Integer,
-                description: String::from("first number to be added"),
-                property_enum: None,
-            })
-            .required_parameter(ToolParameterProperty {
-                name: String::from("second_number"),
-                property_type: ToolParameterPropertyType::Integer,
-                description: String::from("second number to be added"),
-                property_enum: None,
-            }),
+            .required_parameter(ToolParameterProperty::new(
+                    "first_number",
+                    ToolParameterPropertyType::Integer,
+                    "first number to be added",
+            ))
+            .required_parameter(ToolParameterProperty::new(
+                "second_number",
+                ToolParameterPropertyType::Integer,
+                "second number to be added",
+            ))
     ]
 }
 
@@ -105,14 +103,11 @@ where
         }
 
         loop {
-            let completion = gateway
-                .complete(CompletionRequest {
-                    model: model.id.clone(),
-                    messages: &messages,
-                    tools: Some(build_tools()),
-                    reasoning_effort: Some(reasoning_effort),
-                })
-                .await?;
+
+            let mut request = CompletionRequest::new(model.id.clone(), &messages );
+            request.tools = Some(build_tools());
+            request.reasoning_effort = Some(reasoning_effort);
+            let completion = gateway.complete(request).await?;
 
             let mut seen_reasoning = false;
             let mut agent_response = String::new();

@@ -51,18 +51,16 @@ fn build_tools() -> Vec<Tool> {
     vec![
         Tool::new("get_current_datetime", "gets the current date and time"),
         Tool::new("add_two_numbers", "adds two numbers together")
-            .required_parameter(ToolParameterProperty {
-                name: String::from("first_number"),
-                property_type: ToolParameterPropertyType::Integer,
-                description: String::from("first number to be added"),
-                property_enum: None,
-            })
-            .required_parameter(ToolParameterProperty {
-                name: String::from("second_number"),
-                property_type: ToolParameterPropertyType::Integer,
-                description: String::from("second number to be added"),
-                property_enum: None,
-            }),
+            .required_parameter(ToolParameterProperty::new(
+                    "first_number",
+                    ToolParameterPropertyType::Integer,
+                    "first number to be added"
+            ))
+            .required_parameter(ToolParameterProperty::new(
+                    "second_number",
+                    ToolParameterPropertyType::Integer,
+                    "second number to be added"
+            )),
     ]
 }
 
@@ -103,14 +101,11 @@ where
         }
 
         loop {
-            let stream = gateway
-                .stream(CompletionRequest {
-                    model: model.id.clone(),
-                    messages: &messages,
-                    tools: Some(build_tools()),
-                    reasoning_effort: Some(reasoning_effort),
-                })
-                .await?;
+
+            let mut request = CompletionRequest::new(model.id.clone(), &messages);
+            request.tools = Some(build_tools());
+            request.reasoning_effort = Some(reasoning_effort);
+            let stream = gateway.stream(request).await?;
 
             pin_mut!(stream);
 

@@ -6,6 +6,7 @@ pub struct Model {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ModelModality {
     Text,
     Image,
@@ -13,6 +14,7 @@ pub enum ModelModality {
     Audio,
 }
 
+#[non_exhaustive]
 pub enum ToolParameterPropertyType {
     String,
     Number,
@@ -21,6 +23,7 @@ pub enum ToolParameterPropertyType {
     // TODO: Need to add support for Object and Array types
 }
 
+#[non_exhaustive]
 pub struct ToolParameterProperty {
     pub name: String,
     pub property_type: ToolParameterPropertyType,
@@ -28,11 +31,34 @@ pub struct ToolParameterProperty {
     pub property_enum: Option<Vec<String>>,
 }
 
+impl ToolParameterProperty {
+    pub fn new(
+        name: impl Into<String>, 
+        property_type: ToolParameterPropertyType, 
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            property_type,
+            description: description.into(),
+            property_enum: None,
+        }
+    }
+}
+
+#[non_exhaustive]
 pub struct ToolParameters {
     pub properties: Vec<ToolParameterProperty>,
     pub required: Vec<String>,
 }
 
+impl ToolParameters {
+    pub fn new(properties: Vec<ToolParameterProperty>, required: Vec<String>) -> Self {
+        Self { properties, required }
+    }
+}
+
+#[non_exhaustive]
 pub struct Tool {
     pub name: String,
     pub description: String,
@@ -72,6 +98,7 @@ impl Tool {
     }
 }
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug)]
 pub enum ReasoningEffort {
     None,
@@ -95,7 +122,7 @@ impl ReasoningEffort {
     ];
 }
 
-
+#[non_exhaustive]
 pub struct CompletionRequest<'a> {
     pub model: String,
     pub messages: &'a [Message],
@@ -103,6 +130,21 @@ pub struct CompletionRequest<'a> {
     pub reasoning_effort: Option<ReasoningEffort>,
 }
 
+impl<'a> CompletionRequest<'a> {
+    pub fn new(
+        model: String, 
+        messages: &'a [Message],
+    ) -> Self {
+        Self {
+            model,
+            messages,
+            tools: None, 
+            reasoning_effort: None,
+        }
+    }
+}
+
+#[non_exhaustive]
 pub struct CompletionResponse {
     pub model: String,
     pub text: Option<String>,
@@ -110,6 +152,21 @@ pub struct CompletionResponse {
     pub tool_calls: Vec<ToolCall>,
 }
 
+impl CompletionResponse{
+    pub fn new (
+        model: String,
+        tool_calls: Vec<ToolCall>,
+    ) -> Self {
+        Self {
+            model,
+            text: None,
+            reasoning: None,
+            tool_calls,
+        }
+    }
+}
+
+#[non_exhaustive]
 pub struct CompletionChunk {
     pub text: Option<String>,
     pub reasoning: Option<String>,
@@ -117,13 +174,32 @@ pub struct CompletionChunk {
     pub finished: bool,
 }
 
+impl CompletionChunk {
+    pub fn new(tool_calls: Vec<ToolCall>, finished: bool,) -> Self {
+        Self {
+            text: None,
+            reasoning: None,
+            tool_calls,
+            finished,
+        }
+    }
+} 
+
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: String,
 }
 
+impl ToolCall {
+    pub fn new(id: String, name: String, arguments: String) -> Self {
+        Self { id, name, arguments }
+    }
+}
+
+#[non_exhaustive]
 pub enum Message {
     System {
         content: String,
