@@ -15,7 +15,7 @@ pub trait LlmProvider {
     fn stream(
         &self,
         request: CompletionRequest,
-    ) -> impl Future<Output = Result<Self::CompletionStream, GatewayError>>;
+    ) -> impl Future<Output = Result<Self::CompletionStream, GatewayError>> + Send;
 
-    fn list_models(&self) -> impl Future<Output = Result<Vec<Model>, GatewayError>>;
+    fn list_models(&self) -> impl Future<Output = Result<Vec<Model>, GatewayError>> + Send;
 }
