@@ -180,7 +180,6 @@ where
             &gateway,
         ).await?;
 
-
         println!();
     }
     Ok(())

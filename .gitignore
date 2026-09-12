@@ -6,4 +6,5 @@
 
 #tooling
 .sonarqube/
+.scannerwork/
 .pi/
