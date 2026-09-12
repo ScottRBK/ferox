@@ -9,7 +9,13 @@ use serde::de::DeserializeOwned;
 use ferox::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
 use ferox::models::{
-    CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall, ToolParameterProperty,
+    CompletionRequest, 
+    Message, 
+    Model, 
+    ReasoningEffort, 
+    Tool, 
+    ToolCall, 
+    ToolParameterProperty,
     ToolParameterPropertyType,
 };
 use ferox::LlmProvider;
@@ -78,6 +84,74 @@ async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
     Ok(user_input)
 }
 
+fn render_completion(
+    render_text: &str, 
+    is_reasoning: bool
+) -> Result<(), Box<dyn Error + Send +Sync>> {
+
+    let tty = std::io::stdout().is_terminal();
+    let dim = if tty { "\x1b[90m" } else { "" };
+    let reset = if tty { "\x1b[0m" } else { "" };
+
+    if is_reasoning {
+        println!["REASONING"];
+        println!();
+        print!("{dim}{}", render_text);
+        io::stdout().flush()?;
+    } else {
+        println!["{reset}AGENT RESPONSE:"];
+        println!();
+        print!("{}", render_text);
+        io::stdout().flush()?;
+    }
+    Ok(())
+}
+
+async fn get_agent_input<P> (
+    model: &Model,
+    messages: &mut Vec<Message>,
+    reasoning_effort: ReasoningEffort,
+    gateway: &Gateway<P>,
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    P: LlmProvider,
+{
+        loop {
+
+        let mut request = CompletionRequest::new(model.id.clone(), messages );
+        request.tools = Some(build_tools());
+        request.reasoning_effort = Some(reasoning_effort);
+        let completion = gateway.complete(request).await?;
+
+        let mut agent_response = String::new();
+
+        if let Some(response) = &completion.reasoning {
+            render_completion(response, true)?;
+        }
+
+        if let Some(response) = &completion.text
+            && !response.is_empty()
+        {
+            render_completion(response, false)?;
+            agent_response.push_str(response);
+        }
+
+        messages.push(Message::Assistant {
+            content: Some(agent_response),
+            tool_calls: completion.tool_calls.clone(),
+            reasoning: completion.reasoning,
+        });
+
+        let tool_calls = completion.tool_calls.clone();
+        messages.extend(handle_tool_calls(&tool_calls)?);
+        if tool_calls.is_empty() {
+            break;
+        }
+
+    }
+    Ok(())
+}
+
 async fn chat_session<P>(
     model: &Model,
     reasoning_effort: ReasoningEffort,
@@ -87,11 +161,7 @@ where
     P: LlmProvider,
 {
     let mut messages = Vec::<Message>::new();
-    let tty = std::io::stdout().is_terminal();
-    let dim = if tty { "\x1b[90m" } else { "" };
-    let reset = if tty { "\x1b[0m" } else { "" };
-
-    loop {
+        loop {
         let user_input = get_user_input().await?;
 
         match user_input.trim() {
@@ -103,52 +173,13 @@ where
             }
         }
 
-        loop {
+        get_agent_input(
+            model,
+            &mut messages,
+            reasoning_effort,
+            &gateway,
+        ).await?;
 
-            let mut request = CompletionRequest::new(model.id.clone(), &messages );
-            request.tools = Some(build_tools());
-            request.reasoning_effort = Some(reasoning_effort);
-            let completion = gateway.complete(request).await?;
-
-            let mut seen_reasoning = false;
-            let mut agent_response = String::new();
-
-            if let Some(response) = &completion.reasoning {
-                if !seen_reasoning {
-                    println!["REASONING"];
-                    println!();
-                    seen_reasoning = true;
-                }
-
-                print!("{dim}{}", response);
-                io::stdout().flush()?;
-            }
-
-            if let Some(response) = &completion.text
-                && !response.is_empty()
-            {
-                if seen_reasoning {
-                    println!();
-                }
-                println!["{reset}AGENT RESPONSE:"];
-                println!();
-                print!("{}", response);
-                io::stdout().flush()?;
-                agent_response.push_str(response);
-            }
-
-            messages.push(Message::Assistant {
-                content: Some(agent_response),
-                tool_calls: completion.tool_calls.clone(),
-                reasoning: completion.reasoning,
-            });
-
-            let tool_calls = completion.tool_calls.clone();
-            messages.extend(handle_tool_calls(&tool_calls)?);
-            if tool_calls.is_empty() {
-                break;
-            }
-        }
 
         println!();
     }

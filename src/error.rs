@@ -14,8 +14,11 @@ pub enum LlmError {
     RateLimited { retry_after: Option<Duration> },
     #[error("timeout")]
     Timeout,
-    #[error("provider unavailable")]
-    ProviderUnavailable,
+    #[error("provider unavailable ({code}): {message}")]
+    ProviderUnavailable {
+        code: u16,
+        message: String,
+    },
     #[error("provider failure: {message}")]
     ProviderFailure { message: String },
     #[error("transport error: {message}")]
