@@ -30,9 +30,11 @@ impl From<OpenAiClientError> for LlmError {
                 body,
             } => LlmError::InvalidRequest { message: body },
             OpenAiClientError::Status { code: 408, .. } => LlmError::Timeout,
-            OpenAiClientError::Status {
-                code: 500..=599, ..
-            } => LlmError::ProviderUnavailable,
+            OpenAiClientError::Status { code: code @ 500..=599 , body } => 
+                LlmError::ProviderUnavailable { 
+                    code,
+                    message: body,
+                },
             OpenAiClientError::Status { body, .. } => LlmError::ProviderFailure { message: body },
             OpenAiClientError::Decode(err) => LlmError::InvalidResponse {
                 message: err.to_string(),

@@ -2,5 +2,5 @@ projectKey=ferox
 serverUrl=http://localhost:9001
 serverVersion=26.8.0.126808
 dashboardUrl=http://localhost:9001/dashboard?id=ferox
-ceTaskId=3515c83e-6a45-4a1b-9a81-4cc39002fec1
-ceTaskUrl=http://localhost:9001/api/ce/task?id=3515c83e-6a45-4a1b-9a81-4cc39002fec1
+ceTaskId=8a8a0f37-97e7-4cb1-8213-9279a54d1189
+ceTaskUrl=http://localhost:9001/api/ce/task?id=8a8a0f37-97e7-4cb1-8213-9279a54d1189
