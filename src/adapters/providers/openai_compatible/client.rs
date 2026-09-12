@@ -1,22 +1,28 @@
-use crate::{
-    error::{GatewayError, LlmError},
-    models::{
-        CompletionChunk, CompletionRequest, CompletionResponse, Model
-    },
-    ports::llm::LlmProvider,
-    adapters::providers::openai_compatible::models::*,
-};
+use super::errors::{ClientBuildError, OpenAiClientError};
 use super::mapping::{
-    to_domain_model, to_domain_toolcall, to_provider_message,
-    to_provider_reasoning_effort, to_provider_tools,
+    to_domain_model, to_domain_toolcall, to_provider_message, to_provider_reasoning_effort,
+    to_provider_tools,
 };
-use super::errors::{ ClientBuildError, OpenAiClientError };
+use crate::adapters::providers::openai_compatible::mapping::to_domain_finish_reason;
+use crate::{
+    adapters::providers::openai_compatible::models::{
+        ChatCompletionsRequest,
+        ChatCompletionsResponse,
+        ChatCompletionsStreamResponse,
+        ModelsResponse,
+        PendingToolCall,
+        ProviderModel
+    },
+    error::LlmError,
+    models::{CompletionChunk, CompletionRequest, CompletionResponse, Model},
+    ports::llm::LlmProvider,
+};
 use async_stream::try_stream;
 use futures_core::stream::Stream;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde_json;
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -186,7 +192,7 @@ impl OpenAiCompatibleClient {
 
         if data == "[DONE]" {
             return None;
-        };
+        }
 
         Some(Self::parse_chat_completions_stream_response(data))
     }
@@ -229,17 +235,14 @@ impl OpenAiCompatibleClient {
     }
 }
 
-
-
-
-
 impl LlmProvider for OpenAiCompatibleClient {
-    type CompletionStream = Pin<Box<dyn Stream<Item = Result<CompletionChunk, GatewayError>> + Send>>;
+    type CompletionStream =
+        Pin<Box<dyn Stream<Item = Result<CompletionChunk, LlmError>> + Send>>;
 
     async fn complete(
         &self,
         request: CompletionRequest<'_>,
-    ) -> Result<CompletionResponse, GatewayError> {
+    ) -> Result<CompletionResponse, LlmError> {
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -278,7 +281,7 @@ impl LlmProvider for OpenAiCompatibleClient {
     async fn stream(
         &self,
         request: CompletionRequest<'_>,
-    ) -> Result<Self::CompletionStream, GatewayError> {
+    ) -> Result<Self::CompletionStream, LlmError> {
         let provider_request = ChatCompletionsRequest {
             model: request.model,
             messages: request.messages.iter().map(to_provider_message).collect(),
@@ -302,7 +305,7 @@ impl LlmProvider for OpenAiCompatibleClient {
                 .map_err(OpenAiClientError::Transport)
                 .map_err(LlmError::from)?;
 
-            return Err(GatewayError::Llm(OpenAiClientError::Status { code, body }.into()));
+            return Err(OpenAiClientError::Status { code, body }.into());
         }
 
         let mut pending_tool_calls = BTreeMap::<usize, PendingToolCall>::new();
@@ -339,18 +342,21 @@ impl LlmProvider for OpenAiCompatibleClient {
                 text: choice.and_then(|choice| choice.delta.content.clone()),
                 reasoning: choice.and_then(|choice| choice.delta.reasoning_content.clone()),
                 tool_calls,
-                finished,
+                finished_reason: choice.and_then(
+                    |c| c.finish_reason.as_ref()
+                    .and_then(to_domain_finish_reason)
+                )
             })
         });
 
         Ok(Box::pin(stream))
     }
 
-    async fn list_models(&self) -> Result<Vec<Model>, GatewayError> {
+    async fn list_models(&self) -> Result<Vec<Model>, LlmError> {
         let provider_models = self.fetch_models().await.map_err(LlmError::from)?;
         provider_models
             .into_iter()
-            .map(|m| to_domain_model(m).map_err(GatewayError::from))
+            .map(to_domain_model)
             .collect()
     }
 }
@@ -359,9 +365,7 @@ impl LlmProvider for OpenAiCompatibleClient {
 mod tests {
     use super::*;
     use crate::adapters::providers::openai_compatible::mapping::to_provider_property_type;
-    use crate::models::{
-        ModelModality, Tool, ToolParameterProperty, ToolParameterPropertyType,
-    };
+    use crate::models::{ModelModality, Tool, ToolParameterProperty, ToolParameterPropertyType};
     use futures_util::StreamExt;
     use futures_util::pin_mut;
     use wiremock::matchers::{method, path};

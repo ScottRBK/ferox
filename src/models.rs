@@ -1,8 +1,23 @@
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Model {
     pub id: String,
     pub input_modalities: Vec<ModelModality>,
     pub output_modalities: Vec<ModelModality>,
+}
+
+impl Model {
+    pub fn new(
+        id: impl Into<String>,
+        input_modalities: Vec<ModelModality>,
+        output_modalities: Vec<ModelModality>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            input_modalities,
+            output_modalities,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -167,20 +182,28 @@ impl CompletionResponse{
 }
 
 #[non_exhaustive]
+pub enum FinishReason{
+    Stop,
+    Length,
+    ToolCalls,
+    ContentFilter,
+}
+
+#[non_exhaustive]
 pub struct CompletionChunk {
     pub text: Option<String>,
     pub reasoning: Option<String>,
     pub tool_calls: Vec<ToolCall>,
-    pub finished: bool,
+    pub finished_reason: Option<FinishReason>,
 }
 
 impl CompletionChunk {
-    pub fn new(tool_calls: Vec<ToolCall>, finished: bool,) -> Self {
+    pub fn new(tool_calls: Vec<ToolCall>, finished_reason: Option<FinishReason>,) -> Self {
         Self {
             text: None,
             reasoning: None,
             tool_calls,
-            finished,
+            finished_reason,
         }
     }
 } 
@@ -210,6 +233,7 @@ pub enum Message {
     Assistant {
         content: Option<String>,
         tool_calls: Vec<ToolCall>,
+        reasoning: Option<String>,
     },
     Tool {
         tool_call_id: String,

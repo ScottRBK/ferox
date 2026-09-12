@@ -1,5 +1,5 @@
-use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
-use ferox::gateway::Gateway;
+use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox::Gateway;
 use ferox::models::{
     CompletionRequest, Message, Tool, ToolParameterProperty, ToolParameterPropertyType,
 };
@@ -228,7 +228,7 @@ async fn streamed_tool_call_deltas_are_reassembled_through_gateway() {
             .iter()
             .all(|chunk| chunk.tool_calls.is_empty())
     );
-    assert!(final_chunk.finished);
+    assert!(final_chunk.finished_reason.is_some());
     assert_eq!(final_chunk.tool_calls.len(), 1);
 
     let tool_call = &final_chunk.tool_calls[0];

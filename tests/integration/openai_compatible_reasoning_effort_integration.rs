@@ -1,5 +1,5 @@
-use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
-use ferox::gateway::Gateway;
+use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox::Gateway;
 use ferox::models::{CompletionRequest, Message, ReasoningEffort};
 use futures_util::{StreamExt, pin_mut};
 use serde_json::json;

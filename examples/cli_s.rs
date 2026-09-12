@@ -8,12 +8,12 @@ use futures_util::pin_mut;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
-use ferox::gateway::Gateway;
+use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox::Gateway;
 use ferox::models::{
     CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType
 };
-use ferox::ports::llm::LlmProvider;
+use ferox::LlmProvider;
 
 const BASE_URL: &str = "http://192.168.1.201:8080/v1";
 
@@ -110,6 +110,7 @@ where
             pin_mut!(stream);
 
             let mut seen_reasoning = false;
+            let mut agent_reasoning = String::new();
             let mut seen_agent_response = false;
             let mut agent_response = String::new();
             let mut tool_calls = Vec::new();
@@ -126,6 +127,7 @@ where
 
                     print!("{dim}{response}");
                     io::stdout().flush()?;
+                    agent_reasoning.push_str(response)
                 }
 
                 if let Some(response) = &completion.text
@@ -162,6 +164,7 @@ where
             messages.push(Message::Assistant {
                 content: assistant_content,
                 tool_calls: tool_calls.clone(),
+                reasoning: None,
             });
 
             if tool_calls.is_empty() {
@@ -298,11 +301,11 @@ mod tests {
     use super::*;
 
     fn handle_add_tool_call(arguments: &str) -> Message {
-        let tool_call = ToolCall {
-            id: "call-1".into(),
-            name: "add_two_numbers".into(),
-            arguments: arguments.into(),
-        };
+        let tool_call = ToolCall::new(
+            "call-1".into(),
+            "add_two_numbers".into(),
+            arguments.into(),
+        );
 
         handle_tool_calls(&[tool_call])
             .expect("tool errors should be returned as tool messages")
