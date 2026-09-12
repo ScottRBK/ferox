@@ -1,21 +1,21 @@
 use futures_core::Stream;
 use std::future::Future;
 
-use crate::error::GatewayError;
+use crate::error::LlmError;
 use crate::models::{CompletionChunk, CompletionRequest, CompletionResponse, Model};
 
 pub trait LlmProvider {
-    type CompletionStream: Stream<Item = Result<CompletionChunk, GatewayError>> + Send + 'static;
+    type CompletionStream: Stream<Item = Result<CompletionChunk, LlmError>> + Send + 'static;
 
     fn complete(
         &self,
         request: CompletionRequest,
-    ) -> impl Future<Output = Result<CompletionResponse, GatewayError>> + Send;
+    ) -> impl Future<Output = Result<CompletionResponse, LlmError>> + Send;
 
     fn stream(
         &self,
         request: CompletionRequest,
-    ) -> impl Future<Output = Result<Self::CompletionStream, GatewayError>> + Send;
+    ) -> impl Future<Output = Result<Self::CompletionStream, LlmError>> + Send;
 
-    fn list_models(&self) -> impl Future<Output = Result<Vec<Model>, GatewayError>> + Send;
+    fn list_models(&self) -> impl Future<Output = Result<Vec<Model>, LlmError>> + Send;
 }

@@ -1,5 +1,16 @@
-pub mod adapters;
+//! ferox
+//!
+//! ferrox is a Large Language Model Provider gateway so that you can interact with multiple LLM 
+//! providers agnostically.
+
+mod adapters;
+mod gateway;
+
 pub mod error;
-pub mod gateway;
 pub mod models;
-pub mod ports;
+mod ports;
+
+
+pub use adapters::providers::openai_compatible;
+pub use ports::llm::LlmProvider;
+pub use gateway::Gateway;

@@ -1,7 +1,7 @@
-use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
-use ferox::gateway::Gateway;
+use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox::Gateway;
 use ferox::models::{CompletionRequest, Message};
-use ferox::ports::llm::LlmProvider;
+use ferox::LlmProvider;
 
 const BASE_URL: &str = "http://192.168.1.202:8080/v1";
 const MODEL: &str = "qwen3.6-35b";

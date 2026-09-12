@@ -1,55 +1,12 @@
 use crate::{
     adapters::providers::openai_compatible::models::{
-        ChatCompletionFunction, ChatCompletionTool, ChatCompletionToolCall,
-        ChatCompletionToolCallFunction, ChatCompletionToolParameterProperty,
-        ChatCompletionToolParameterPropertyType, ChatCompletionToolParameters,
-        ChatCompletionsMessageRequest, ProviderModel,
+        ChatCompletionFunction, ChatCompletionTool, ChatCompletionToolCall, ChatCompletionToolCallFunction, ChatCompletionToolParameterProperty, ChatCompletionToolParameterPropertyType, ChatCompletionToolParameters, ChatCompletionsMessageRequest, ChoicesFinishReason, ProviderModel
     },
     error::LlmError,
     models::{
-        Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall,
-        ToolParameterProperty, ToolParameterPropertyType, ToolParameters,
+        FinishReason, Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType, ToolParameters
     },
 };
-
-pub(super) fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
-    match message {
-        Message::System { content } => ChatCompletionsMessageRequest::System {
-            content: content.clone(),
-        },
-        Message::User { content } => ChatCompletionsMessageRequest::User {
-            content: content.clone(),
-        },
-        Message::Assistant {
-            content,
-            tool_calls,
-        } => ChatCompletionsMessageRequest::Assistant {
-            content: content.clone(),
-            tool_calls: tool_calls.iter().map(to_provider_toolcall).collect(),
-            reasoning_content: None,
-        },
-        Message::Tool {
-            tool_call_id,
-            content,
-        } => ChatCompletionsMessageRequest::Tool {
-            tool_call_id: tool_call_id.clone(),
-            content: content.clone(),
-        },
-    }
-}
-
-pub(super) fn to_provider_reasoning_effort(reasoning_effort: ReasoningEffort) -> String {
-    match reasoning_effort {
-        ReasoningEffort::None => "none",
-        ReasoningEffort::Minimal => "minimal",
-        ReasoningEffort::Low => "low",
-        ReasoningEffort::Medium => "medium",
-        ReasoningEffort::High => "high",
-        ReasoningEffort::XHigh => "xhigh",
-        ReasoningEffort::Max => "max",
-    }
-    .into()
-}
 
 fn to_domain_model_modality(modality: &str) -> Result<ModelModality, LlmError> {
     match modality {
@@ -82,6 +39,46 @@ pub(super) fn to_domain_toolcall(tool_call: &ChatCompletionToolCall) -> ToolCall
         name: tool_call.function.name.clone(),
         arguments: tool_call.function.arguments.clone(),
     }
+}
+
+pub(super) fn to_provider_message(message: &Message) -> ChatCompletionsMessageRequest {
+    match message {
+        Message::System { content } => ChatCompletionsMessageRequest::System {
+            content: content.clone(),
+        },
+        Message::User { content } => ChatCompletionsMessageRequest::User {
+            content: content.clone(),
+        },
+        Message::Assistant {
+            content,
+            tool_calls,
+            reasoning,
+        } => ChatCompletionsMessageRequest::Assistant {
+            content: content.clone(),
+            tool_calls: tool_calls.iter().map(to_provider_toolcall).collect(),
+            reasoning_content: reasoning.clone(),
+        },
+        Message::Tool {
+            tool_call_id,
+            content,
+        } => ChatCompletionsMessageRequest::Tool {
+            tool_call_id: tool_call_id.clone(),
+            content: content.clone(),
+        },
+    }
+}
+
+pub(super) fn to_provider_reasoning_effort(reasoning_effort: ReasoningEffort) -> String {
+    match reasoning_effort {
+        ReasoningEffort::None => "none",
+        ReasoningEffort::Minimal => "minimal",
+        ReasoningEffort::Low => "low",
+        ReasoningEffort::Medium => "medium",
+        ReasoningEffort::High => "high",
+        ReasoningEffort::XHigh => "xhigh",
+        ReasoningEffort::Max => "max",
+    }
+    .into()
 }
 
 fn to_provider_toolcall(tool_call: &ToolCall) -> ChatCompletionToolCall {
@@ -139,5 +136,14 @@ pub(super) fn to_provider_property_type(
         ToolParameterPropertyType::Number => ChatCompletionToolParameterPropertyType::Number,
         ToolParameterPropertyType::Integer => ChatCompletionToolParameterPropertyType::Integer,
         ToolParameterPropertyType::Boolean => ChatCompletionToolParameterPropertyType::Boolean,
+    }
+}
+
+pub(super) fn to_domain_finish_reason(reason: &ChoicesFinishReason) -> Option<FinishReason> {
+    match reason {
+        ChoicesFinishReason::Stop => Some(FinishReason::Stop),
+        ChoicesFinishReason::Length => Some(FinishReason::Length),
+        ChoicesFinishReason::ToolCalls => Some(FinishReason::ToolCalls),
+        ChoicesFinishReason::ContentFilter => Some(FinishReason::ContentFilter),
     }
 }

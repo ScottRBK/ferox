@@ -5,13 +5,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
-use ferox::gateway::Gateway;
+// use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
+use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox::Gateway;
 use ferox::models::{
     CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall, ToolParameterProperty,
     ToolParameterPropertyType,
 };
-use ferox::ports::llm::LlmProvider;
+use ferox::LlmProvider;
 
 const BASE_URL: &str = "http://192.168.1.201:8080/v1";
 
@@ -139,6 +140,7 @@ where
             messages.push(Message::Assistant {
                 content: Some(agent_response),
                 tool_calls: completion.tool_calls.clone(),
+                reasoning: completion.reasoning,
             });
 
             let tool_calls = completion.tool_calls.clone();
@@ -275,11 +277,11 @@ mod tests {
     use super::*;
 
     fn handle_add_tool_call(arguments: &str) -> Message {
-        let tool_call = ToolCall {
-            id: "call-1".into(),
-            name: "add_two_numbers".into(),
-            arguments: arguments.into(),
-        };
+        let tool_call = ToolCall::new(
+            "call-1".into(),
+            "add_two_numbers".into(),
+            arguments.into(),
+        );
 
         handle_tool_calls(&[tool_call])
             .expect("tool errors should be returned as tool messages")
