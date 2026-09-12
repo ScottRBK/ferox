@@ -11,7 +11,15 @@ use serde::de::DeserializeOwned;
 use ferox::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
 use ferox::models::{
-    CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType
+    CompletionChunk, 
+    CompletionRequest, 
+    Message, 
+    Model, 
+    ReasoningEffort, 
+    Tool, 
+    ToolCall, 
+    ToolParameterProperty, 
+    ToolParameterPropertyType
 };
 use ferox::LlmProvider;
 
@@ -75,6 +83,110 @@ async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
     Ok(user_input)
 }
 
+fn render_stream_chunk(
+    completion: &CompletionChunk,
+    seen_reasoning: &mut bool, 
+    seen_agent_response: &mut bool,
+    agent_reasoning: &mut String,
+    agent_response: &mut String,
+) ->Result<(), Box<dyn Error + Send + Sync>> {
+
+    let tty = std::io::stdout().is_terminal();
+    let dim = if tty { "\x1b[90m" } else { "" };
+    let reset = if tty { "\x1b[0m" } else { "" };
+
+   if let Some(response) = &completion.reasoning {
+        if !*seen_reasoning {
+            println!("REASONING");
+            println!();
+            *seen_reasoning = true;
+        }
+
+        print!("{dim}{response}");
+        io::stdout().flush()?;
+        agent_reasoning.push_str(response)
+    }
+
+    if let Some(response) = &completion.text
+        && !response.is_empty()
+    {
+        if !*seen_agent_response {
+            if *seen_reasoning {
+                println!();
+            }
+
+            println!("{reset}AGENT RESPONSE:");
+            println!();
+            *seen_agent_response = true;
+        }
+
+        print!("{response}");
+        io::stdout().flush()?;
+        agent_response.push_str(response);
+    }
+
+    Ok(())
+}
+
+async fn get_agent_input<P>(
+    model: &Model,
+    messages: &mut Vec<Message>,
+    reasoning_effort: ReasoningEffort,
+    gateway: &Gateway<P>,
+) ->Result<(), Box<dyn Error + Send + Sync>>
+where
+    P: LlmProvider,
+{    
+    loop {
+
+        let mut request = CompletionRequest::new(model.id.clone(), messages);
+        request.tools = Some(build_tools());
+        request.reasoning_effort = Some(reasoning_effort);
+        let stream = gateway.stream(request).await?;
+
+        pin_mut!(stream);
+
+        let mut seen_reasoning = false;
+        let mut agent_reasoning = String::new();
+        let mut seen_agent_response = false;
+        let mut agent_response = String::new();
+        let mut tool_calls = Vec::new();
+
+        while let Some(completion) = stream.next().await {
+            let completion = completion?;
+           
+            render_stream_chunk(
+                &completion,
+                &mut seen_reasoning,
+                &mut seen_agent_response,
+                &mut agent_reasoning,
+                &mut agent_response,
+            )?;
+            tool_calls.extend(completion.tool_calls);
+        }
+
+        let assistant_content = if agent_response.is_empty() {
+            None
+        } else {
+            Some(agent_response)
+        };
+
+        messages.push(Message::Assistant {
+            content: assistant_content,
+            tool_calls: tool_calls.clone(),
+            reasoning: None,
+        });
+
+        if tool_calls.is_empty() {
+            break;
+        }
+        messages.extend(handle_tool_calls(&tool_calls)?);
+    }
+
+    Ok(())
+
+}
+
 async fn chat_session<P>(
     model: &Model,
     reasoning_effort: ReasoningEffort,
@@ -84,9 +196,6 @@ where
     P: LlmProvider,
 {
     let mut messages = Vec::<Message>::new();
-    let tty = std::io::stdout().is_terminal();
-    let dim = if tty { "\x1b[90m" } else { "" };
-    let reset = if tty { "\x1b[0m" } else { "" };
 
     loop {
         let user_input = get_user_input().await?;
@@ -100,79 +209,12 @@ where
             }
         }
 
-        loop {
-
-            let mut request = CompletionRequest::new(model.id.clone(), &messages);
-            request.tools = Some(build_tools());
-            request.reasoning_effort = Some(reasoning_effort);
-            let stream = gateway.stream(request).await?;
-
-            pin_mut!(stream);
-
-            let mut seen_reasoning = false;
-            let mut agent_reasoning = String::new();
-            let mut seen_agent_response = false;
-            let mut agent_response = String::new();
-            let mut tool_calls = Vec::new();
-
-            while let Some(completion) = stream.next().await {
-                let completion = completion?;
-
-                if let Some(response) = &completion.reasoning {
-                    if !seen_reasoning {
-                        println!("REASONING");
-                        println!();
-                        seen_reasoning = true;
-                    }
-
-                    print!("{dim}{response}");
-                    io::stdout().flush()?;
-                    agent_reasoning.push_str(response)
-                }
-
-                if let Some(response) = &completion.text
-                    && !response.is_empty()
-                {
-                    if !seen_agent_response {
-                        if seen_reasoning {
-                            println!();
-                        }
-
-                        println!("{reset}AGENT RESPONSE:");
-                        println!();
-                        seen_agent_response = true;
-                    }
-
-                    print!("{response}");
-                    io::stdout().flush()?;
-                    agent_response.push_str(response);
-                }
-
-                tool_calls.extend(completion.tool_calls);
-            }
-
-            if seen_reasoning && !seen_agent_response {
-                println!("{reset}");
-            }
-
-            let assistant_content = if agent_response.is_empty() {
-                None
-            } else {
-                Some(agent_response)
-            };
-
-            messages.push(Message::Assistant {
-                content: assistant_content,
-                tool_calls: tool_calls.clone(),
-                reasoning: None,
-            });
-
-            if tool_calls.is_empty() {
-                break;
-            }
-
-            messages.extend(handle_tool_calls(&tool_calls)?);
-        }
+        get_agent_input(
+            model,
+            &mut messages,
+            reasoning_effort,
+            &gateway,
+        ).await?;
 
         println!();
     }
