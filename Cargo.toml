@@ -18,6 +18,7 @@ http = "1.4.1"
 thiserror = "2.0.20"
 
 [dev-dependencies]
+dotenvy = "0.15.7"
 wiremock = "0.6.5"
 
 [features]

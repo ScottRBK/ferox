@@ -1,7 +1,4 @@
-use crate::{
-    error::{LlmError},
-    models::{ToolCall}
-};
+use crate::{error::LlmError, models::ToolCall};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

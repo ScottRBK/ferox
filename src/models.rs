@@ -48,8 +48,8 @@ pub struct ToolParameterProperty {
 
 impl ToolParameterProperty {
     pub fn new(
-        name: impl Into<String>, 
-        property_type: ToolParameterPropertyType, 
+        name: impl Into<String>,
+        property_type: ToolParameterPropertyType,
         description: impl Into<String>,
     ) -> Self {
         Self {
@@ -69,7 +69,10 @@ pub struct ToolParameters {
 
 impl ToolParameters {
     pub fn new(properties: Vec<ToolParameterProperty>, required: Vec<String>) -> Self {
-        Self { properties, required }
+        Self {
+            properties,
+            required,
+        }
     }
 }
 
@@ -146,14 +149,11 @@ pub struct CompletionRequest<'a> {
 }
 
 impl<'a> CompletionRequest<'a> {
-    pub fn new(
-        model: String, 
-        messages: &'a [Message],
-    ) -> Self {
+    pub fn new(model: String, messages: &'a [Message]) -> Self {
         Self {
             model,
             messages,
-            tools: None, 
+            tools: None,
             reasoning_effort: None,
         }
     }
@@ -167,11 +167,8 @@ pub struct CompletionResponse {
     pub tool_calls: Vec<ToolCall>,
 }
 
-impl CompletionResponse{
-    pub fn new (
-        model: String,
-        tool_calls: Vec<ToolCall>,
-    ) -> Self {
+impl CompletionResponse {
+    pub fn new(model: String, tool_calls: Vec<ToolCall>) -> Self {
         Self {
             model,
             text: None,
@@ -182,7 +179,7 @@ impl CompletionResponse{
 }
 
 #[non_exhaustive]
-pub enum FinishReason{
+pub enum FinishReason {
     Stop,
     Length,
     ToolCalls,
@@ -198,7 +195,7 @@ pub struct CompletionChunk {
 }
 
 impl CompletionChunk {
-    pub fn new(tool_calls: Vec<ToolCall>, finished_reason: Option<FinishReason>,) -> Self {
+    pub fn new(tool_calls: Vec<ToolCall>, finished_reason: Option<FinishReason>) -> Self {
         Self {
             text: None,
             reasoning: None,
@@ -206,7 +203,7 @@ impl CompletionChunk {
             finished_reason,
         }
     }
-} 
+}
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -218,7 +215,11 @@ pub struct ToolCall {
 
 impl ToolCall {
     pub fn new(id: String, name: String, arguments: String) -> Self {
-        Self { id, name, arguments }
+        Self {
+            id,
+            name,
+            arguments,
+        }
     }
 }
 

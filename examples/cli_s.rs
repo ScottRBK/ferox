@@ -8,32 +8,37 @@ use futures_util::pin_mut;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use ferox::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
-use ferox::models::{
-    CompletionChunk, 
-    CompletionRequest, 
-    Message, 
-    Model, 
-    ReasoningEffort, 
-    Tool, 
-    ToolCall, 
-    ToolParameterProperty, 
-    ToolParameterPropertyType
-};
 use ferox::LlmProvider;
+use ferox::models::{
+    CompletionChunk, CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall,
+    ToolParameterProperty, ToolParameterPropertyType,
+};
+use ferox::openai_compatible::OpenAiCompatibleClient;
 
-const BASE_URL: &str = "http://192.168.1.201:8080/v1";
+const BASE_URL_ENV: &str = "FEROX_BASE_URL";
+const API_KEY_ENV: &str = "FEROX_API_KEY";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let client = OpenAiCompatibleClient::builder()
-        .base_url(BASE_URL)
-        .api_key("")
-        .build()?;
+    let _ = dotenvy::dotenv();
+    let base_url = required_env(BASE_URL_ENV)?;
+    let api_key = std::env::var(API_KEY_ENV).ok();
+
+    let mut builder = OpenAiCompatibleClient::builder().base_url(base_url);
+    if let Some(api_key) = api_key {
+        builder = builder.api_key(api_key);
+    }
+
+    let client = builder.build()?;
 
     let gateway = Gateway::new(client);
     repl(gateway).await
+}
+
+fn required_env(name: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+    std::env::var(name)
+        .map_err(|_| format!("Set {name} in .env or the shell before running this example").into())
 }
 
 async fn repl<P>(gateway: Gateway<P>) -> Result<(), Box<dyn Error + Send + Sync>>
@@ -46,7 +51,7 @@ where
 
     let selected_model = select_models(&models).await?;
 
-    let reasoning_effort = select_reasoning_effort().await?; 
+    let reasoning_effort = select_reasoning_effort().await?;
 
     println!["selected model: {}", selected_model.id];
 
@@ -60,14 +65,14 @@ fn build_tools() -> Vec<Tool> {
         Tool::new("get_current_datetime", "gets the current date and time"),
         Tool::new("add_two_numbers", "adds two numbers together")
             .required_parameter(ToolParameterProperty::new(
-                    "first_number",
-                    ToolParameterPropertyType::Integer,
-                    "first number to be added"
+                "first_number",
+                ToolParameterPropertyType::Integer,
+                "first number to be added",
             ))
             .required_parameter(ToolParameterProperty::new(
-                    "second_number",
-                    ToolParameterPropertyType::Integer,
-                    "second number to be added"
+                "second_number",
+                ToolParameterPropertyType::Integer,
+                "second number to be added",
             )),
     ]
 }
@@ -85,17 +90,16 @@ async fn get_user_input() -> Result<String, Box<dyn Error + Send + Sync>> {
 
 fn render_stream_chunk(
     completion: &CompletionChunk,
-    seen_reasoning: &mut bool, 
+    seen_reasoning: &mut bool,
     seen_agent_response: &mut bool,
     agent_reasoning: &mut String,
     agent_response: &mut String,
-) ->Result<(), Box<dyn Error + Send + Sync>> {
-
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let tty = std::io::stdout().is_terminal();
     let dim = if tty { "\x1b[90m" } else { "" };
     let reset = if tty { "\x1b[0m" } else { "" };
 
-   if let Some(response) = &completion.reasoning {
+    if let Some(response) = &completion.reasoning {
         if !*seen_reasoning {
             println!("REASONING");
             println!();
@@ -133,12 +137,11 @@ async fn get_agent_input<P>(
     messages: &mut Vec<Message>,
     reasoning_effort: ReasoningEffort,
     gateway: &Gateway<P>,
-) ->Result<(), Box<dyn Error + Send + Sync>>
+) -> Result<(), Box<dyn Error + Send + Sync>>
 where
     P: LlmProvider,
-{    
+{
     loop {
-
         let mut request = CompletionRequest::new(model.id.clone(), messages);
         request.tools = Some(build_tools());
         request.reasoning_effort = Some(reasoning_effort);
@@ -154,7 +157,7 @@ where
 
         while let Some(completion) = stream.next().await {
             let completion = completion?;
-           
+
             render_stream_chunk(
                 &completion,
                 &mut seen_reasoning,
@@ -184,7 +187,6 @@ where
     }
 
     Ok(())
-
 }
 
 async fn chat_session<P>(
@@ -209,12 +211,7 @@ where
             }
         }
 
-        get_agent_input(
-            model,
-            &mut messages,
-            reasoning_effort,
-            &gateway,
-        ).await?;
+        get_agent_input(model, &mut messages, reasoning_effort, &gateway).await?;
 
         println!();
     }
@@ -315,11 +312,10 @@ async fn select_models(models: &[Model]) -> Result<&Model, Box<dyn Error + Send 
 }
 
 async fn select_reasoning_effort() -> Result<ReasoningEffort, Box<dyn Error + Send + Sync>> {
-    
     println!("please select a reasoning effort for the model");
-    let reasoning_effort = &ReasoningEffort::ALL; 
+    let reasoning_effort = &ReasoningEffort::ALL;
     for (i, effort) in reasoning_effort.iter().enumerate() {
-       println!("{}. {:?}", i+1, effort);
+        println!("{}. {:?}", i + 1, effort);
     }
 
     loop {
@@ -335,7 +331,6 @@ async fn select_reasoning_effort() -> Result<ReasoningEffort, Box<dyn Error + Se
             _ => println!("Invalid selection, try again"),
         }
     }
-
 }
 
 #[cfg(test)]
@@ -343,11 +338,7 @@ mod tests {
     use super::*;
 
     fn handle_add_tool_call(arguments: &str) -> Message {
-        let tool_call = ToolCall::new(
-            "call-1".into(),
-            "add_two_numbers".into(),
-            arguments.into(),
-        );
+        let tool_call = ToolCall::new("call-1".into(), "add_two_numbers".into(), arguments.into());
 
         handle_tool_calls(&[tool_call])
             .expect("tool errors should be returned as tool messages")
