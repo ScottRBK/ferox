@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
 
+/// Configures an [`OpenAiCompatibleClient`]. A base URL is required.
 pub struct OpenAiCompatibleClientBuilder {
     base_url: Option<String>,
     api_key: Option<String>,
@@ -34,6 +35,7 @@ impl Default for OpenAiCompatibleClientBuilder {
     }
 }
 impl OpenAiCompatibleClientBuilder {
+    /// Creates a builder with no base URL or API key and a 120-second read timeout.
     pub fn new() -> Self {
         Self {
             base_url: None,
@@ -42,21 +44,38 @@ impl OpenAiCompatibleClientBuilder {
         }
     }
 
+    /// Sets the API root, including any version path, without a trailing slash.
+    ///
+    /// For example, use `https://api.openai.com/v1`. Requests append `/models` or
+    /// `/chat/completions` to this value. The builder does not validate or normalise it.
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = Some(url.into());
         self
     }
 
+    /// Sets the API key sent as a bearer token on each request.
+    ///
+    /// Leave this unset for endpoints that do not require authentication.
     pub fn api_key(mut self, key: impl Into<String>) -> Self {
         self.api_key = Some(key.into());
         self
     }
 
+    /// Sets the timeout for each response read operation. The default is 120 seconds.
+    ///
+    /// The timer resets after each successful read, so this does not limit the total
+    /// duration of a streaming response.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
+    /// Builds the client without contacting the provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientBuildError::MissingBaseUrl`] if no base URL was set, or
+    /// [`ClientBuildError::HttpClient`] if the HTTP client could not be created.
     pub fn build(self) -> Result<OpenAiCompatibleClient, ClientBuildError> {
         let base_url = self.base_url.ok_or(ClientBuildError::MissingBaseUrl)?;
         let http = Client::builder()
@@ -72,6 +91,10 @@ impl OpenAiCompatibleClientBuilder {
     }
 }
 
+/// A provider adapter for OpenAI-compatible model and chat completion endpoints.
+///
+/// Implements [`LlmProvider`] for full responses, streaming responses, and model listing.
+/// Streaming tool calls are assembled and emitted when a choice reports a finish reason.
 pub struct OpenAiCompatibleClient {
     http: Client,
     base_url: String,
@@ -79,6 +102,16 @@ pub struct OpenAiCompatibleClient {
 }
 
 impl OpenAiCompatibleClient {
+    /// Creates a builder with no base URL or API key and a 120-second read timeout.
+    ///
+    /// ```
+    /// use ferox::openai_compatible::OpenAiCompatibleClient;
+    ///
+    /// let client = OpenAiCompatibleClient::builder()
+    ///     .base_url("http://localhost:8080/v1")
+    ///     .build()?;
+    /// # Ok::<(), ferox::openai_compatible::ClientBuildError>(())
+    /// ```
     pub fn builder() -> OpenAiCompatibleClientBuilder {
         OpenAiCompatibleClientBuilder::new()
     }
