@@ -105,12 +105,12 @@ impl OpenAiCompatibleClient {
     /// Creates a builder with no base URL or API key and a 120-second read timeout.
     ///
     /// ```
-    /// use ferox::openai_compatible::OpenAiCompatibleClient;
+    /// use ferox_ai::openai_compatible::OpenAiCompatibleClient;
     ///
     /// let client = OpenAiCompatibleClient::builder()
     ///     .base_url("http://localhost:8080/v1")
     ///     .build()?;
-    /// # Ok::<(), ferox::openai_compatible::ClientBuildError>(())
+    /// # Ok::<(), ferox_ai::openai_compatible::ClientBuildError>(())
     /// ```
     pub fn builder() -> OpenAiCompatibleClientBuilder {
         OpenAiCompatibleClientBuilder::new()

@@ -1,9 +1,10 @@
 [package]
-name = "ferox"
+name = "ferox-ai"
 version = "0.1.0"
 edition = "2024"
 description = "Provider agnostic Large Language Model gateway"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/ScottRBK/ferox"
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }

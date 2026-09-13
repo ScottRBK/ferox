@@ -1,12 +1,12 @@
-use ferox::Gateway;
-use ferox::models::{
+use ferox_ai::Gateway;
+use ferox_ai::models::{
     CompletionRequest, Message, ReasoningEffort, Tool, ToolParameterProperty,
     ToolParameterPropertyType,
 };
-use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox_ai::openai_compatible::OpenAiCompatibleClient;
 
-use futures_util::{StreamExt, pin_mut};
 use futures::lock::Mutex;
+use futures_util::{StreamExt, pin_mut};
 use std::sync::OnceLock;
 
 const BASE_URL_ENV: &str = "FEROX_E2E_BASE_URL";

@@ -8,13 +8,13 @@ use futures_util::pin_mut;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use ferox::Gateway;
-use ferox::LlmProvider;
-use ferox::models::{
+use ferox_ai::Gateway;
+use ferox_ai::LlmProvider;
+use ferox_ai::models::{
     CompletionChunk, CompletionRequest, Message, Model, ReasoningEffort, Tool, ToolCall,
     ToolParameterProperty, ToolParameterPropertyType,
 };
-use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox_ai::openai_compatible::OpenAiCompatibleClient;
 
 const BASE_URL_ENV: &str = "FEROX_BASE_URL";
 const API_KEY_ENV: &str = "FEROX_API_KEY";
