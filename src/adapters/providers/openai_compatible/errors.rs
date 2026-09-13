@@ -48,10 +48,13 @@ impl From<OpenAiClientError> for LlmError {
     }
 }
 
+/// A failure to configure an OpenAI-compatible client before any request is sent.
 #[derive(Debug, Error)]
 pub enum ClientBuildError {
+    /// No base URL was supplied to the builder.
     #[error("missing base_url parameter")]
     MissingBaseUrl,
+    /// The underlying HTTP client could not be created.
     #[error("failed to build HTTP client {0}")]
     HttpClient(#[from] reqwest::Error),
 }

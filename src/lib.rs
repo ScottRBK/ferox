@@ -2,7 +2,7 @@
 //!
 //! ferrox is a Large Language Model Provider gateway so that you can interact with multiple LLM
 //! providers agnostically.
-
+#![warn(missing_docs)]
 mod adapters;
 mod gateway;
 
