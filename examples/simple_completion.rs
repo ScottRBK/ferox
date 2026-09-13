@@ -1,17 +1,3 @@
-# Ferox
-
-Ferox is my first implementation of an open source libary using the Rust Language.
-
-Ferox is LLM provider gateway that will deliver multi-provider AI inference support for 
-upstream consumers.
-
-## Example Usage
-The below example would be from an open-ai chat completions inference provider opperating at 
-`http://localhost:8080/v1`.
-
-See [examples](./examples/) for more information
-
-```rust 
 use std::error::Error;
 use ferox::{ Gateway };
 use ferox::models::{
@@ -37,15 +23,3 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     Ok(())
 }
-```
-
-
-## Development Roadmap 
-
-- [x] OpenAI Compatible Chat Completions endpoint 
-    - [x] handle reasoning injection into context array
-    - [x] handle reasoning effort being passed to inference provider 
-- [ ] Basic Logging 
-- [x] Provider Configuration
-- [ ] Open Telemtry and Advanced Logging
-- [ ] Publish as cargo package

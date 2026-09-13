@@ -5,7 +5,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-// use ferox::adapters::providers::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
 use ferox::LlmProvider;
 use ferox::models::{

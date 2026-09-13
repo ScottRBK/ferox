@@ -16,13 +16,13 @@ impl Model {
     /// Creates model metadata from a provider identifier and its supported formats.
     pub fn new(
         id: impl Into<String>,
-        input_modalities: Vec<ModelModality>,
-        output_modalities: Vec<ModelModality>,
+        input_modalities: Option<Vec<ModelModality>>,
+        output_modalities: Option<Vec<ModelModality>>,
     ) -> Self {
         Self {
             id: id.into(),
-            input_modalities,
-            output_modalities,
+            input_modalities: input_modalities.unwrap_or_else(|| vec![ModelModality::Text]),
+            output_modalities: output_modalities.unwrap_or_else(|| vec![ModelModality::Text]),
         }
     }
 }
