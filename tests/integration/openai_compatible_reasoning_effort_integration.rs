@@ -1,6 +1,6 @@
-use ferox::Gateway;
-use ferox::models::{CompletionRequest, FinishReason, Message, ReasoningEffort};
-use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox_ai::Gateway;
+use ferox_ai::models::{CompletionRequest, FinishReason, Message, ReasoningEffort};
+use ferox_ai::openai_compatible::OpenAiCompatibleClient;
 use futures_util::{StreamExt, pin_mut};
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};

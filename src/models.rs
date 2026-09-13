@@ -13,7 +13,49 @@ pub struct Model {
 }
 
 impl Model {
-    /// Creates model metadata from a provider identifier and its supported formats.
+    /// Creates model metadata, defaulting omitted modalities to text.
+    ///
+    /// Passing `None` for either modality list uses `[ModelModality::Text]`.
+    /// Passing `Some(list)` keeps that list unchanged, even when it is empty.
+    /// Input and output defaults apply independently.
+    ///
+    /// These defaults apply only to this constructor. Models returned by the
+    /// OpenAI-compatible adapter's model listing do not use this constructor.
+    ///
+    /// # Examples
+    ///
+    /// Omit both lists to use text input and output:
+    ///
+    /// ```
+    /// use ferox_ai::models::{Model, ModelModality};
+    ///
+    /// let model = Model::new("my-model", None, None);
+    ///
+    /// assert!(matches!(model.input_modalities.as_slice(), [ModelModality::Text]));
+    /// assert!(matches!(model.output_modalities.as_slice(), [ModelModality::Text]));
+    /// ```
+    ///
+    /// Supply image input while keeping the default text output:
+    ///
+    /// ```
+    /// use ferox_ai::models::{Model, ModelModality};
+    ///
+    /// let model = Model::new("image-model", Some(vec![ModelModality::Image]), None);
+    ///
+    /// assert!(matches!(model.input_modalities.as_slice(), [ModelModality::Image]));
+    /// assert!(matches!(model.output_modalities.as_slice(), [ModelModality::Text]));
+    /// ```
+    ///
+    /// An explicitly empty list stays empty, while the other list still defaults to text:
+    ///
+    /// ```
+    /// use ferox_ai::models::{Model, ModelModality};
+    ///
+    /// let model = Model::new("my-model", None, Some(vec![]));
+    ///
+    /// assert!(matches!(model.input_modalities.as_slice(), [ModelModality::Text]));
+    /// assert!(model.output_modalities.is_empty());
+    /// ```
     pub fn new(
         id: impl Into<String>,
         input_modalities: Option<Vec<ModelModality>>,
@@ -109,7 +151,7 @@ impl ToolParameters {
 /// The caller is responsible for executing the requested function.
 ///
 /// ```
-/// use ferox::models::{Tool, ToolParameterProperty, ToolParameterPropertyType};
+/// use ferox_ai::models::{Tool, ToolParameterProperty, ToolParameterPropertyType};
 ///
 /// let tool = Tool::new("get_weather", "Get the current weather")
 ///     .required_parameter(ToolParameterProperty::new(
@@ -204,7 +246,7 @@ impl ReasoningEffort {
 /// A completion request that borrows its conversation history.
 ///
 /// ```
-/// use ferox::models::{CompletionRequest, Message};
+/// use ferox_ai::models::{CompletionRequest, Message};
 ///
 /// let messages = [Message::User {
 ///     content: "What is the capital of France?".into(),

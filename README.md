@@ -1,23 +1,21 @@
-# Ferox
+# ferox-ai
 
-Ferox is my first implementation of an open source libary using the Rust Language.
+ferox-ai is my first open source Rust library. It provides a shared interface for interacting
+with LLM providers, with an OpenAI-compatible adapter available today.
 
-Ferox is LLM provider gateway that will deliver multi-provider AI inference support for 
-upstream consumers.
+Add `ferox-ai` as a dependency in `Cargo.toml`; use `ferox_ai` in Rust imports.
 
-## Example Usage
-The below example would be from an open-ai chat completions inference provider opperating at 
-`http://localhost:8080/v1`.
+## Example usage
+
+This example uses an OpenAI-compatible chat completions provider at `http://localhost:8080/v1`.
 
 See [examples](./examples/) for more information
 
 ```rust 
 use std::error::Error;
-use ferox::{ Gateway };
-use ferox::models::{
-    CompletionRequest, Message, Model
-};
-use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox_ai::Gateway;
+use ferox_ai::models::{CompletionRequest, Message, Model};
+use ferox_ai::openai_compatible::OpenAiCompatibleClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -40,7 +38,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 ```
 
 
-## Development Roadmap 
+`Model::new(id, None, None)` defaults both input and output modalities to text.
+Pass `Some(vec![...])` to specify either list. An explicitly empty list stays empty.
+These defaults apply to the constructor; the provider's model listing does not use them.
+
+## Development roadmap
 
 - [x] OpenAI Compatible Chat Completions endpoint 
     - [x] handle reasoning injection into context array

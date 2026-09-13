@@ -1,7 +1,4 @@
-//! ferox
-//!
-//! ferrox is a Large Language Model Provider gateway so that you can interact with multiple LLM
-//! providers agnostically.
+//! ferox-ai provides a shared interface for interacting with LLM providers.
 #![warn(missing_docs)]
 mod adapters;
 mod gateway;

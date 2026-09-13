@@ -1,7 +1,7 @@
-use ferox::Gateway;
-use ferox::error::{GatewayError, LlmError};
-use ferox::models::{CompletionRequest, Message, ModelModality};
-use ferox::openai_compatible::OpenAiCompatibleClient;
+use ferox_ai::Gateway;
+use ferox_ai::error::{GatewayError, LlmError};
+use ferox_ai::models::{CompletionRequest, Message, ModelModality};
+use ferox_ai::openai_compatible::OpenAiCompatibleClient;
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
