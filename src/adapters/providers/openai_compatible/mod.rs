@@ -1,9 +1,7 @@
 mod client;
-mod models;
-mod mapping;
 mod errors;
+mod mapping;
+mod models;
 
-pub use client::{ OpenAiCompatibleClient, OpenAiCompatibleClientBuilder };
-pub use errors:: { ClientBuildError };
-
-
+pub use client::{OpenAiCompatibleClient, OpenAiCompatibleClientBuilder};
+pub use errors::ClientBuildError;

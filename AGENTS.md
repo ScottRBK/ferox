@@ -24,15 +24,18 @@ invoking actual interface boundaries
 1. e2e Tests - held within the `tests/e2e` folder,  tests that test a full e2e user journey, invoke
 the interface boundaries, eg/ make actual model calls, these are feature switched in `./Cargo.toml`
 
+#### runs unit and integartion tests 
 ```bash
-cargo test # runs unit and integartion tests 
+cargo test 
 ```
 
+#### only runs the E2E group
 ```bash
-cargo test --features e2e-tests --test e2e # only runs the E2E group
+cargo test --features e2e-tests --test e2e 
 ```
 
+#### tests everything including the e2e
 ```bash
-cargo test --features e2e-tests # tests everything including the e2e
+cargo test --features e2e-tests 
 ```
 

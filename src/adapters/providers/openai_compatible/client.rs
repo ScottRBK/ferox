@@ -6,12 +6,8 @@ use super::mapping::{
 use crate::adapters::providers::openai_compatible::mapping::to_domain_finish_reason;
 use crate::{
     adapters::providers::openai_compatible::models::{
-        ChatCompletionsRequest,
-        ChatCompletionsResponse,
-        ChatCompletionsStreamResponse,
-        ModelsResponse,
-        PendingToolCall,
-        ProviderModel
+        ChatCompletionsRequest, ChatCompletionsResponse, ChatCompletionsStreamResponse,
+        ModelsResponse, PendingToolCall, ProviderModel,
     },
     error::LlmError,
     models::{CompletionChunk, CompletionRequest, CompletionResponse, Model},
@@ -236,8 +232,7 @@ impl OpenAiCompatibleClient {
 }
 
 impl LlmProvider for OpenAiCompatibleClient {
-    type CompletionStream =
-        Pin<Box<dyn Stream<Item = Result<CompletionChunk, LlmError>> + Send>>;
+    type CompletionStream = Pin<Box<dyn Stream<Item = Result<CompletionChunk, LlmError>> + Send>>;
 
     async fn complete(
         &self,
@@ -342,10 +337,8 @@ impl LlmProvider for OpenAiCompatibleClient {
                 text: choice.and_then(|choice| choice.delta.content.clone()),
                 reasoning: choice.and_then(|choice| choice.delta.reasoning_content.clone()),
                 tool_calls,
-                finished_reason: choice.and_then(
-                    |c| c.finish_reason.as_ref()
-                    .and_then(to_domain_finish_reason)
-                )
+                finished_reason: choice
+                    .and_then(|c| c.finish_reason.as_ref().and_then(to_domain_finish_reason)),
             })
         });
 
@@ -354,10 +347,7 @@ impl LlmProvider for OpenAiCompatibleClient {
 
     async fn list_models(&self) -> Result<Vec<Model>, LlmError> {
         let provider_models = self.fetch_models().await.map_err(LlmError::from)?;
-        provider_models
-            .into_iter()
-            .map(to_domain_model)
-            .collect()
+        provider_models.into_iter().map(to_domain_model).collect()
     }
 }
 

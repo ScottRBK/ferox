@@ -1,10 +1,14 @@
 use crate::{
     adapters::providers::openai_compatible::models::{
-        ChatCompletionFunction, ChatCompletionTool, ChatCompletionToolCall, ChatCompletionToolCallFunction, ChatCompletionToolParameterProperty, ChatCompletionToolParameterPropertyType, ChatCompletionToolParameters, ChatCompletionsMessageRequest, ChoicesFinishReason, ProviderModel
+        ChatCompletionFunction, ChatCompletionTool, ChatCompletionToolCall,
+        ChatCompletionToolCallFunction, ChatCompletionToolParameterProperty,
+        ChatCompletionToolParameterPropertyType, ChatCompletionToolParameters,
+        ChatCompletionsMessageRequest, ChoicesFinishReason, ProviderModel,
     },
     error::LlmError,
     models::{
-        FinishReason, Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall, ToolParameterProperty, ToolParameterPropertyType, ToolParameters
+        FinishReason, Message, Model, ModelModality, ReasoningEffort, Tool, ToolCall,
+        ToolParameterProperty, ToolParameterPropertyType, ToolParameters,
     },
 };
 
@@ -14,19 +18,21 @@ fn to_domain_model_modality(modality: &str) -> Result<ModelModality, LlmError> {
         "image" => Ok(ModelModality::Image),
         "video" => Ok(ModelModality::Video),
         "audio" => Ok(ModelModality::Audio),
-        _ => Err(LlmError::InvalidModelModality { modality: (modality.into()) }), 
+        _ => Err(LlmError::InvalidModelModality {
+            modality: (modality.into()),
+        }),
     }
 }
 
 fn to_domain_model_modalities(modalities: Vec<String>) -> Result<Vec<ModelModality>, LlmError> {
-   modalities
-       .into_iter()
-       .map(|modality| to_domain_model_modality(&modality))
-       .collect()
+    modalities
+        .into_iter()
+        .map(|modality| to_domain_model_modality(&modality))
+        .collect()
 }
 
 pub(super) fn to_domain_model(provider_model: ProviderModel) -> Result<Model, LlmError> {
-    Ok( Model {
+    Ok(Model {
         id: provider_model.id,
         input_modalities: to_domain_model_modalities(provider_model.input_modalities)?,
         output_modalities: to_domain_model_modalities(provider_model.output_modalities)?,

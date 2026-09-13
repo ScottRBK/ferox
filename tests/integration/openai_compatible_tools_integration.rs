@@ -1,8 +1,8 @@
-use ferox::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
 use ferox::models::{
     CompletionRequest, Message, Tool, ToolParameterProperty, ToolParameterPropertyType,
 };
+use ferox::openai_compatible::OpenAiCompatibleClient;
 use futures_util::{StreamExt, pin_mut};
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};
@@ -108,32 +108,33 @@ async fn registered_tools_are_sent_to_openai_compatible_provider() {
     let tools = vec![
         Tool::new("get_weather", "Get the current weather for a location")
             .required_parameter(ToolParameterProperty::new(
-                    "location",
-                    ToolParameterPropertyType::String,
-                    "City and country"))
+                "location",
+                ToolParameterPropertyType::String,
+                "City and country",
+            ))
             .optional_parameter({
                 let mut prop = ToolParameterProperty::new(
-                        "unit",
-                        ToolParameterPropertyType::String,
-                        "Temperature unit",
-                    );
+                    "unit",
+                    ToolParameterPropertyType::String,
+                    "Temperature unit",
+                );
                 prop.property_enum = Some(vec!["celsius".into(), "fahrenheit".into()]);
                 prop
             }),
-        Tool::new("get_current_time", "Get the current time for a timezone")
-            .required_parameter(ToolParameterProperty::new(
+        Tool::new("get_current_time", "Get the current time for a timezone").required_parameter(
+            ToolParameterProperty::new(
                 "timezone",
                 ToolParameterPropertyType::String,
-                "IANA timezone",)
-            )
-    ]; 
+                "IANA timezone",
+            ),
+        ),
+    ];
 
     // Act
     let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
     request.tools = Some(tools);
 
-    let response = gateway
-        .complete(request).await.unwrap();
+    let response = gateway.complete(request).await.unwrap();
 
     // Assert
     assert_eq!(response.text.as_deref(), Some("The tools were registered."));
@@ -195,22 +196,21 @@ async fn streamed_tool_call_deltas_are_reassembled_through_gateway() {
     let tools = vec![
         Tool::new("add_two_numbers", "Add two integers together")
             .required_parameter(ToolParameterProperty::new(
-                    "first_number",
-                    ToolParameterPropertyType::Integer,
-                    "First integer",
+                "first_number",
+                ToolParameterPropertyType::Integer,
+                "First integer",
             ))
             .required_parameter(ToolParameterProperty::new(
-                    "second_number",
-                    ToolParameterPropertyType::Integer,
-                    "Second integer",
+                "second_number",
+                ToolParameterPropertyType::Integer,
+                "Second integer",
             )),
     ];
 
     // Act
     let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
     request.tools = Some(tools);
-    let stream = gateway
-        .stream(request).await.unwrap();
+    let stream = gateway.stream(request).await.unwrap();
 
     pin_mut!(stream);
 

@@ -1,6 +1,6 @@
-use ferox::openai_compatible::OpenAiCompatibleClient;
 use ferox::Gateway;
-use ferox::models::{CompletionRequest, Message, ReasoningEffort};
+use ferox::models::{CompletionRequest, FinishReason, Message, ReasoningEffort};
+use ferox::openai_compatible::OpenAiCompatibleClient;
 use futures_util::{StreamExt, pin_mut};
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};
@@ -38,9 +38,7 @@ async fn reasoning_effort_is_omitted_when_not_supplied() {
 
     // Act
     let request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
-    let response = gateway
-        .complete(request).await
-        .unwrap();
+    let response = gateway.complete(request).await.unwrap();
 
     // Assert
     assert_eq!(response.text.as_deref(), Some("Hello"));
@@ -77,8 +75,7 @@ async fn reasoning_effort_is_sent_when_supplied() {
     // Act
     let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
     request.reasoning_effort = Some(ReasoningEffort::Medium);
-    let response = gateway
-        .complete(request).await.unwrap();
+    let response = gateway.complete(request).await.unwrap();
 
     // Assert
     assert_eq!(response.text.as_deref(), Some("Hello"));
@@ -118,22 +115,30 @@ async fn reasoning_effort_is_sent_for_streaming_requests() {
     // Act
     let mut request = CompletionRequest::new("qwen3.6-35b".into(), &messages);
     request.reasoning_effort = Some(ReasoningEffort::High);
-    let stream = gateway
-        .stream(request).await.unwrap();
+    let stream = gateway.stream(request).await.unwrap();
     pin_mut!(stream);
-    stream
-        .next()
-        .await
-        .expect("expected the initial completion chunk")
-        .expect("expected a valid initial completion chunk");
-    let reasoning_chunk = stream
-        .next()
-        .await
-        .expect("expected a reasoning chunk")
-        .expect("expected a valid reasoning chunk");
+    let mut reasoning = String::new();
+    let mut text = String::new();
+    let mut finished_reason = None;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.expect("expected a valid completion chunk");
+        if let Some(value) = chunk.reasoning {
+            reasoning.push_str(&value);
+        }
+        if let Some(value) = chunk.text {
+            text.push_str(&value);
+        }
+        if chunk.finished_reason.is_some() {
+            finished_reason = chunk.finished_reason;
+        }
+    }
 
     // Assert
-    assert_eq!(reasoning_chunk.reasoning.as_deref(), Some("Here"));
+    assert!(reasoning.starts_with("Here's"));
+    assert!(reasoning.contains("thinking process"));
+    assert_eq!(text, "Hey! How can I help you today? 😊");
+    assert!(matches!(finished_reason, Some(FinishReason::Stop)));
 }
 
 fn gateway(server: &MockServer) -> Gateway<OpenAiCompatibleClient> {

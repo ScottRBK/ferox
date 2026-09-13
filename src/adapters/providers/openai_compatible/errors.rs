@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::error::LlmError;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum OpenAiClientError {
@@ -30,11 +30,13 @@ impl From<OpenAiClientError> for LlmError {
                 body,
             } => LlmError::InvalidRequest { message: body },
             OpenAiClientError::Status { code: 408, .. } => LlmError::Timeout,
-            OpenAiClientError::Status { code: code @ 500..=599 , body } => 
-                LlmError::ProviderUnavailable { 
-                    code,
-                    message: body,
-                },
+            OpenAiClientError::Status {
+                code: code @ 500..=599,
+                body,
+            } => LlmError::ProviderUnavailable {
+                code,
+                message: body,
+            },
             OpenAiClientError::Status { body, .. } => LlmError::ProviderFailure { message: body },
             OpenAiClientError::Decode(err) => LlmError::InvalidResponse {
                 message: err.to_string(),
@@ -51,6 +53,5 @@ pub enum ClientBuildError {
     #[error("missing base_url parameter")]
     MissingBaseUrl,
     #[error("failed to build HTTP client {0}")]
-    HttpClient(#[from]reqwest::Error),
+    HttpClient(#[from] reqwest::Error),
 }
-

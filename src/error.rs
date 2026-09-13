@@ -1,7 +1,7 @@
-use thiserror::Error; 
 use std::time::Duration;
+use thiserror::Error;
 
-#[derive(Debug,Error)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum LlmError {
     #[error("invalid request: {message}")]
@@ -15,10 +15,7 @@ pub enum LlmError {
     #[error("timeout")]
     Timeout,
     #[error("provider unavailable ({code}): {message}")]
-    ProviderUnavailable {
-        code: u16,
-        message: String,
-    },
+    ProviderUnavailable { code: u16, message: String },
     #[error("provider failure: {message}")]
     ProviderFailure { message: String },
     #[error("transport error: {message}")]
@@ -26,9 +23,8 @@ pub enum LlmError {
     #[error("invalid response: {message}")]
     InvalidResponse { message: String },
     #[error("invalid model modality {modality}")]
-    InvalidModelModality{ modality: String },
+    InvalidModelModality { modality: String },
 }
-
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -40,5 +36,5 @@ pub enum GatewayError {
     #[error("policy denied")]
     PolicyDenied,
     #[error("{0}")]
-    Llm(#[from]LlmError),
+    Llm(#[from] LlmError),
 }
