@@ -165,6 +165,7 @@ where
                 &mut agent_reasoning,
                 &mut agent_response,
             )?;
+
             tool_calls.extend(completion.tool_calls);
         }
 

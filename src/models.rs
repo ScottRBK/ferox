@@ -84,6 +84,7 @@ pub enum ModelModality {
 }
 
 /// A scalar JSON type accepted by a tool parameter.
+#[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum ToolParameterPropertyType {
     /// A JSON string.
@@ -98,6 +99,7 @@ pub enum ToolParameterPropertyType {
 }
 
 /// The name, type, and description of one tool argument.
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ToolParameterProperty {
     /// Argument name in the tool call JSON object.
@@ -127,6 +129,7 @@ impl ToolParameterProperty {
 }
 
 /// The argument definitions for a tool.
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ToolParameters {
     /// Arguments the tool accepts.
@@ -165,6 +168,7 @@ impl ToolParameters {
 /// assert_eq!(parameters.properties.len(), 1);
 /// ```
 #[non_exhaustive]
+#[derive(Clone, Debug)]
 pub struct Tool {
     /// Function name used to identify the tool in requests and responses.
     pub name: String,
