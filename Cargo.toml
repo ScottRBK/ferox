@@ -1,6 +1,6 @@
 [package]
 name = "ferox-ai"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Provider agnostic Large Language Model gateway"
 license = "MIT OR Apache-2.0"
