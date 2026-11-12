@@ -50,4 +50,4 @@ These defaults apply to the constructor; the provider's model listing does not u
 - [ ] Basic Logging 
 - [x] Provider Configuration
 - [ ] Open Telemtry and Advanced Logging
-- [ ] Publish as cargo package
+- [x] Publish as cargo package

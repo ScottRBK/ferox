@@ -376,6 +376,7 @@ impl ToolCall {
 
 /// One entry in a conversation sent to a model.
 #[non_exhaustive]
+#[derive(Clone, Debug)]
 pub enum Message {
     /// Instructions that guide the model throughout the conversation.
     System {
